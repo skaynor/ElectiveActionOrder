@@ -2,6 +2,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	const DEBUG = true;
 
+	const COMMAND = DEBUG ? '!pc' : '!popcorn';
+
 	const CHECK_OFF = '☐';
 	const CHECK_PART = '▣';
 	const CHECK_ON = '☑';
@@ -38,7 +40,10 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			if (!playerIsGM(msg.playerid)) {
 				return;
 			}
+			participants().gm = msg.playerid;
+
 			// TODO add from turn tracker
+
 			if (getAllParticipants().length === 0) {
 				debug('Trying to start combat with no participants!');
 				// TODO error
@@ -104,11 +109,10 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function messageHandler(msg) {
-		if (msg.who !== 'Popcorn') {
+		if (msg.who !== 'Initiative') {
 			debug(msg);
 		}
-		const command = DEBUG ? '!pc' : '!popcorn';
-		if (msg.type !== 'api' || !msg.content.startsWith(command)) {
+		if (msg.type !== 'api' || !msg.content.startsWith(COMMAND)) {
 			return;
 		}
 
@@ -148,7 +152,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function send(playerId, content) {
-		sendChat('Popcorn', '/w ' + getPlayerName(playerId) + ' ' + content, null, {noarchive: true});
+		sendChat('Initiative', '/w ' + getPlayerName(playerId) + ' ' + content, null, {noarchive: true});
 	}
 
 	function sendHelp(playerId, options) {
@@ -168,6 +172,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	function resetParticipants() {
 		participants().players = [];
 		participants().monsters = [];
+		participants().monsterTokens = {};
+		participants().gm = [];
 	}
 
 	function resetRoundInfo() {
@@ -219,14 +225,21 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	function addMonster(obj) {
 		const monster = buildParticipantFromTokenOrString(obj);
+		if (getParticipant(monster.id)) {
+			debug('Monster already added, skipping.');
+			return;
+		}
 		participants().monsters.push(monster);
+		if (monster.token) {
+			participants().monsterTokens[monster.token] = true;
+		}
 		debug('Added monster: "', monster, '"');
 	}
 
 	function buildParticipantFromTokenOrString(obj) {
 		if (typeof obj === 'object' && obj.get('subtype') === 'token') {
 			const token = obj;
-			const playerIds = isPlayerControlled(token) ? getControllingPlayers(token) : undefined;
+			const playerIds = isPlayerControlled(token) ? getControllingPlayers(token) : [];
 			const id = token.get('_id');
 			return {
 				id: id,
@@ -308,6 +321,35 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		const canGiveTurnTo = areAllTurnsDone() ? getAllParticipants() : roundInfo().toAct;
 		debug('Can give turn to: ', canGiveTurnTo);
+		sendTurnInfo(participant, roundInfo().curRound, roundInfo().curTurn);
+		sendChoice(participant, canGiveTurnTo);
+	}
+
+	function sendChoice(participant, canGiveTurnTo) {
+		let recipients = participant.playerIds;
+		if (recipients.length === 0) {
+			recipients.push(participants().gm);
+		}
+		if (DEBUG) {
+			recipients = [participants().gm];
+		}
+		const buttons = buildGiveTurnButtons(canGiveTurnTo);
+		const buttonsString = buttons.join(' ');
+		recipients.forEach(recipient => {
+			send(recipient, 'Give turn to <br />' + buttonsString);
+		});
+	}
+
+	function buildGiveTurnButtons(canGiveTurnTo) {
+		return canGiveTurnTo.map(participant => '[' + participant.name + '](' + COMMAND + ' giveturn ' + participant.id + ')');
+	}
+
+	function sendTurnInfo(participant, round, turn) {
+		sendInfo('Round ' + (round + 1) + ', Turn ' + (turn + 1) + '<br/> It\'s ' + participant.name + 's turn!');
+	}
+
+	function sendInfo(message) {
+		sendChat('Initiative', message, null, {noarchive: true});
 	}
 
 	function hasActed(participant) {
