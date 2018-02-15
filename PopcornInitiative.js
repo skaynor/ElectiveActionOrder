@@ -79,9 +79,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 			debug('Starting new combat...');
 			debug('Participants: ', participants());
-			resetRoundInfo();
-			startNewRound();
-			giveTurn(getHighestInit());
+
+			startCombat();
 		},
 		stop: msg => {
 			if (!playerIsGM(msg.playerid)) {
@@ -205,16 +204,89 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		return playerId ? '"' + getObj("player", playerId).get("displayname") + '"' : "gm";
 	}
 
+	function startCombat() {
+		showTurnOrder();
+		resetRoundInfo();
+		startNewRound();
+		giveTurn(getHighestInit());
+	}
+
 	function getTurnOrder() {
 		const turnorder = Campaign().get('turnorder');
 		return turnorder ? JSON.parse(turnorder) : [];
+	}
+
+	function setTurnOrder(turnOrder) {
+		Campaign().set('turnorder', JSON.stringify(turnOrder));
+	}
+
+	function buildTurnOrder() {
+		// TODO handle config.groupMonsters
+		let turnOrder = [];
+		const currentParticipant = getCurrentParticipant();
+		turnOrder.push(buildTurnOrderEntry(currentParticipant, undefined));
+		const allWithoutCurrent = getAllParticipants().filter(_.negate(participantHasId(currentParticipant.id)));
+		let allWithActed = allWithoutCurrent.map(participant => {
+			return {
+				obj: participant,
+				hasActed: hasActed(participant)
+			};
+		});
+		allWithActed.sort((p1, p2) => {
+			if (p1.hasActed && !p2.hasActed) {
+				return 1;
+			} else if (!p1.hasActed && p2.hasActed) {
+				return -1;
+			} else {
+				return p1.obj.name.localeCompare(p2.obj.name);
+			}
+		});
+
+		const turnOrderEntries = allWithActed.map(participant => {
+			return buildTurnOrderEntry(participant.obj, participant.hasActed);
+		});
+		turnOrderEntries.forEach(entry => {
+			turnOrder.push(entry);
+		});
+		return turnOrder;
+	}
+
+	function buildTurnOrderEntry(participant, hasActed) {
+		const id = participant.token || -1;
+		const custom = participant.name;
+		let pr;
+		if (hasActed === undefined) {
+			pr = '';
+		} else {
+			pr = hasActed ? CHECK_ON : CHECK_OFF;
+		}
+		return {
+			id: id,
+			custom: custom,
+			pr: pr
+		};
+	}
+
+
+	function syncTurnOrder() {
+		if (!isCombatRunning()) {
+			debug('Not syncing turnorder outside of combat.');
+			return;
+		}
+
+		const turnOrder = buildTurnOrder();
+		setTurnOrder(turnOrder);
+	}
+
+	function resetTurnOrder() {
+		setTurnOrder([]);
 	}
 
 	function resetParticipants() {
 		participants().players = [];
 		participants().monsters = [];
 		participants().monsterTokens = {};
-		participants().gm = [];
+		participants().gm = undefined;
 	}
 
 	function resetRoundInfo() {
@@ -321,7 +393,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	function getParticipant(id) {
 		let allParticipants = getAllParticipants();
-		return allParticipants.find(participant => participant.id === id);
+		return allParticipants.find(participantHasId(id));
 	}
 
 	function getAllParticipants() {
@@ -359,6 +431,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		roundInfo().curTurn++;
 		debug('New turn: ' + roundInfo().curTurn);
 		arrayRemove(roundInfo().toAct, participant);
+
+		syncTurnOrder();
 
 		const canGiveTurnTo = getPossibleSuccessors();
 		debug('Can give turn to: ', canGiveTurnTo);
@@ -398,7 +472,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function hasActed(participant) {
-		return !roundInfo().toAct.some(toAct => toAct.id === participant.id);
+		return !roundInfo().toAct.some(participantHasId(participant.id));
 	}
 
 	function arrayRemove(array, elem) {
@@ -437,9 +511,13 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		removeById(participant.id);
 	}
 
+	function participantHasId(id) {
+		return participant => participant.id === id;
+	}
+
 	function removeById(id) {
-		const shouldKeepParticipant = participant => participant.id !== id;
-		const toRemove = getAllParticipants().find(_.negate(shouldKeepParticipant));
+		const shouldKeepParticipant = _.negate(participantHasId(id));
+		const toRemove = getAllParticipants().find(participantHasId(id));
 		if (!toRemove) {
 			return;
 		}
@@ -460,6 +538,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		} else if (isCombatRunning()) {
 			sendChoice(getCurrentParticipant(), getPossibleSuccessors());
 		}
+
+		syncTurnOrder();
 	}
 
 	function swapTurn(participant) {
@@ -474,12 +554,21 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	function stopCombat() {
 		resetParticipants();
 		resetRoundInfo();
+		resetTurnOrder();
+		hideTurnOrder();
+	}
+
+	function showTurnOrder() {
+		Campaign().set('initiativepage', true);
+	}
+
+	function hideTurnOrder() {
+		Campaign().set('initiativepage', false);
 	}
 
 	on('ready', () => {
 		log('Popcorn loaded');
 	});
-	return {
-	};
+	return {};
 })();
 
