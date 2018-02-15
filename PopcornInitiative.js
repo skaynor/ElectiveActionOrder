@@ -433,7 +433,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 		roll(participant.init, result => {
 			participant.init = result;
-			list.push(participant);
+			const insertIdx = _.sortedIndex(list, participant, 'name');
+			list.splice(insertIdx, 0, participant);
 			if (isCombatRunning()) {
 				roundInfo().toAct.push(participant);
 				participantsChanged();
