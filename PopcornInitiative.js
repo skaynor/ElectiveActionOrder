@@ -1,5 +1,5 @@
+/* jshint -W132 */
 var PopcornInitiative = PopcornInitiative || (function() {
-
 	const DEBUG = true;
 
 	const COMMAND = DEBUG ? '!pc' : '!popcorn';
@@ -10,31 +10,59 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	on('chat:message', messageHandler);
 
-	let participantsVar = {};
+	on("change:graphic:status_dead", tokenDeadHandler);
+
+	let config = {
+		groupMonsters: true
+	};
+
+	state.PopcornInitiative = {};
+	state.PopcornInitiative.participantsVar = {};
 
 	function participants() {
-		return participantsVar;
+		return state.PopcornInitiative.participantsVar;
 	}
 
 	resetParticipants();
 
 
-	let roundInfoVar = {};
+	state.PopcornInitiative.roundInfoVar = {};
 
 	function roundInfo() {
-		return roundInfoVar;
+		return state.PopcornInitiative.roundInfoVar;
 	}
 
 	resetRoundInfo();
 
+	state.PopcornInitiative.handleDeadToken = tokenDeadHandler;
+
 	const handlers = {
 		add: msg => {
+			if (!playerIsGM(msg.playerid)) {
+				return;
+			}
 			const names = getRemainingOptions(msg, 0);
 			if (names.length !== 0) {
 				addToParticipants(names);
 			} else {
 				addToParticipants(getCurrentSelection(msg));
 			}
+		},
+		remove: msg => {
+			if (!playerIsGM(msg.playerid)) {
+				return;
+			}
+
+			const id = getOption(msg, 0);
+
+			if (id) {
+				removeById(id);
+			} else {
+				const selection = getCurrentSelection(msg);
+				const selectionIds = selection.map(graphic => graphic._id);
+				selectionIds.forEach(removeByTokenId);
+			}
+
 		},
 		start: msg => {
 			if (!playerIsGM(msg.playerid)) {
@@ -56,8 +84,10 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			giveTurn(getHighestInit());
 		},
 		stop: msg => {
-			resetParticipants();
-			resetRoundInfo();
+			if (!playerIsGM(msg.playerid)) {
+				return;
+			}
+			stopCombat();
 		},
 		giveturn: msg => {
 			const playerId = msg.playerid;
@@ -68,9 +98,22 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 			const id = getOption(msg, 0);
 			const participant = getParticipant(id);
+			if (!participant) {
+				debug('Tried to give turn to ', id, ' but that\'s not a valid participant');
+				// TODO error
+				return;
+			}
 			giveTurn(participant);
 		},
+		status: msg => {
+			// TODO pretty print
+			debug('Current participants: ', participants());
+			debug('Current round status: ', roundInfo());
+		},
 		debug: msg => {
+			if (!playerIsGM(msg.playerid)) {
+				return;
+			}
 			const id = getOption(msg, 0);
 			if (!id) {
 				return;
@@ -85,7 +128,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	function getOption(msg, idx) {
 		let options = msg.content.split(' ');
 
-		// skip command + subcommand
+		// skip command + sub command
 		let realIdx = idx + 2;
 
 		if (options.length < realIdx + 1) {
@@ -98,7 +141,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	function getRemainingOptions(msg, idx) {
 		const options = msg.content.split(' ');
 
-		// skip command + subcommand
+		// skip command + sub command
 		let realIdx = idx + 2;
 
 		if (options.length < realIdx + 1) {
@@ -131,7 +174,6 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		handler(msg);
 	}
-
 
 	function debug() {
 		if (!DEBUG) {
@@ -168,7 +210,6 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		return turnorder ? JSON.parse(turnorder) : [];
 	}
 
-
 	function resetParticipants() {
 		participants().players = [];
 		participants().monsters = [];
@@ -184,6 +225,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function addToParticipants(newParticipants) {
+		// TODO if running, reprint turn info
 		debug('Adding participants...: ', newParticipants);
 		newParticipants.forEach(newParticipant => {
 			if (typeof newParticipant === 'object') {
@@ -277,7 +319,6 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		return msg.selected || [];
 	}
 
-
 	function getParticipant(id) {
 		let allParticipants = getAllParticipants();
 		return allParticipants.find(participant => participant.id === id);
@@ -319,10 +360,14 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		debug('New turn: ' + roundInfo().curTurn);
 		arrayRemove(roundInfo().toAct, participant);
 
-		const canGiveTurnTo = areAllTurnsDone() ? getAllParticipants() : roundInfo().toAct;
+		const canGiveTurnTo = getPossibleSuccessors();
 		debug('Can give turn to: ', canGiveTurnTo);
 		sendTurnInfo(participant, roundInfo().curRound, roundInfo().curTurn);
 		sendChoice(participant, canGiveTurnTo);
+	}
+
+	function getPossibleSuccessors() {
+		return areAllTurnsDone() ? getAllParticipants() : roundInfo().toAct;
 	}
 
 	function sendChoice(participant, canGiveTurnTo) {
@@ -366,14 +411,75 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		return curParticipant.playerIds.includes(playerId);
 	}
 
-
 	function areAllTurnsDone() {
 		return roundInfo().toAct.length === 0;
 	}
 
-	return {};
+	function isCombatRunning() {
+		return roundInfo().curRound !== -1;
+	}
+
+	function tokenDeadHandler(graphic) {
+		if (!graphic.get('status_dead')) {
+			return;
+		}
+		const id = graphic.get('_id');
+		const tokenIsMonsterParticipant = participants().monsterTokens[id];
+		if (!tokenIsMonsterParticipant) {
+			return;
+		}
+
+		removeByTokenId(id);
+	}
+
+	function removeByTokenId(tokenId) {
+		const participant = getAllParticipants().find(participant => participant.token === tokenId);
+		removeById(participant.id);
+	}
+
+	function removeById(id) {
+		const shouldKeepParticipant = participant => participant.id !== id;
+		const toRemove = getAllParticipants().find(_.negate(shouldKeepParticipant));
+		if (!toRemove) {
+			return;
+		}
+		participants().players = participants().players.filter(shouldKeepParticipant);
+		participants().monsters = participants().monsters.filter(shouldKeepParticipant);
+		roundInfo().toAct = roundInfo().toAct.filter(shouldKeepParticipant);
+		if (participants().monsterTokens[toRemove.tokenId]) {
+			participants().monsterTokens[toRemove.tokenId] = false;
+		}
+		if (getAllParticipants().length === 0) {
+			stopCombat();
+		} else if (roundInfo().curId === id) {
+			if (roundInfo().toAct.length > 0) {
+				swapTurn(roundInfo().toAct[0]);
+			} else {
+				swapTurn(getHighestInit());
+			}
+		} else if (isCombatRunning()) {
+			sendChoice(getCurrentParticipant(), getPossibleSuccessors());
+		}
+	}
+
+	function swapTurn(participant) {
+		roundInfo().curTurn--;
+		giveTurn(participant);
+	}
+
+	function getCurrentParticipant() {
+		return getParticipant(roundInfo().curId);
+	}
+
+	function stopCombat() {
+		resetParticipants();
+		resetRoundInfo();
+	}
+
+	on('ready', () => {
+		log('Popcorn loaded');
+	});
+	return {
+	};
 })();
 
-on('ready', function() {
-	log('Popcorn loaded');
-});
