@@ -2,11 +2,14 @@
 var PopcornInitiative = PopcornInitiative || (function() {
 	const DEBUG = true;
 
-	const COMMAND = DEBUG ? '!pc' : '!popcorn';
+	const COMMAND = '!pci';
+	const CHAT_NAME = 'Initiative';
 
 	const CHECK_OFF = '☐';
 	const CHECK_PART = '▣';
 	const CHECK_ON = '☑';
+
+	const MONSTER_GROUP = 'Monsters';
 
 	on('chat:message', messageHandler);
 
@@ -41,12 +44,17 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			if (!playerIsGM(msg.playerid)) {
 				return;
 			}
-			const names = getRemainingOptions(msg, 0);
-			if (names.length !== 0) {
-				addToParticipants(names);
-			} else {
-				addToParticipants(getCurrentSelection(msg));
+
+			const selection = getCurrentSelection(msg);
+			const tokens = selection.filter(selected => selected._type === 'graphic');
+			if (tokens.length === 0) {
+				debug('Add: no token selected!');
+				// TODO error
+				return;
 			}
+			const tokenIds = tokens.map(token => token._id);
+			const initiative = getOption(msg, 0);
+			tokenIds.forEach(id => addTokenId(id, initiative));
 		},
 		remove: msg => {
 			if (!playerIsGM(msg.playerid)) {
@@ -70,7 +78,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 			participants().gm = msg.playerid;
 
-			// TODO add from turn tracker
+			addTurnOrder();
 
 			if (getAllParticipants().length === 0) {
 				debug('Trying to start combat with no participants!');
@@ -95,10 +103,10 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				// TODO error
 				return;
 			}
-			const id = getOption(msg, 0);
-			const participant = getParticipant(id);
+			const option = getOption(msg, 0);
+			let participant = (config.groupMonsters && option === MONSTER_GROUP) ? MONSTER_GROUP : getParticipant(option);
 			if (!participant) {
-				debug('Tried to give turn to ', id, ' but that\'s not a valid participant');
+				debug('Tried to give turn to ', option, ' but that\'s not a valid participant');
 				// TODO error
 				return;
 			}
@@ -121,6 +129,9 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			debug(findObjs({
 				_id: id
 			}));
+		},
+		selection: msg => {
+			debug(getCurrentSelection(msg));
 		}
 	};
 
@@ -151,7 +162,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function messageHandler(msg) {
-		if (msg.who !== 'Initiative') {
+		if (msg.who !== CHAT_NAME) {
 			debug(msg);
 		}
 		if (msg.type !== 'api' || !msg.content.startsWith(COMMAND)) {
@@ -201,7 +212,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function getPlayerName(playerId) {
-		return playerId ? '"' + getObj("player", playerId).get("displayname") + '"' : "gm";
+		return playerId && playerId !== 'gm' ? '"' + getObj('player', playerId).get('displayname') + '"' : 'gm';
 	}
 
 	function startCombat() {
@@ -221,11 +232,33 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function buildTurnOrder() {
-		// TODO handle config.groupMonsters
-		let turnOrder = [];
 		const currentParticipant = getCurrentParticipant();
-		turnOrder.push(buildTurnOrderEntry(currentParticipant, undefined));
-		const allWithoutCurrent = getAllParticipants().filter(_.negate(participantHasId(currentParticipant.id)));
+
+		let currentEntry;
+		if (config.groupMonsters && isMonster(currentParticipant)) {
+			currentEntry = buildMonstersTurnOrderEntry();
+		} else {
+			currentEntry = buildTurnOrderEntry(currentParticipant, true);
+		}
+		currentEntry.pr = '';
+
+		let restTurnOrderEntries;
+		if (config.groupMonsters) {
+			restTurnOrderEntries = buildTurnOrderEntries(participants().players, currentParticipant);
+			debug('Rest players: ', restTurnOrderEntries);
+			if (isPlayer(currentParticipant)) {
+				debug('Add monsters');
+				restTurnOrderEntries.push(buildMonstersTurnOrderEntry());
+				debug('Rest players: ', restTurnOrderEntries);
+			}
+		} else {
+			restTurnOrderEntries = buildTurnOrderEntries(getAllParticipants(), currentParticipant);
+		}
+		return [currentEntry].concat(restTurnOrderEntries);
+	}
+
+	function buildTurnOrderEntries(participants, currentParticipant) {
+		const allWithoutCurrent = participants.filter(_.negate(participantHasId(currentParticipant.id)));
 		let allWithActed = allWithoutCurrent.map(participant => {
 			return {
 				obj: participant,
@@ -242,27 +275,37 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 		});
 
-		const turnOrderEntries = allWithActed.map(participant => {
+		return allWithActed.map(participant => {
 			return buildTurnOrderEntry(participant.obj, participant.hasActed);
 		});
-		turnOrderEntries.forEach(entry => {
-			turnOrder.push(entry);
-		});
-		return turnOrder;
 	}
 
 	function buildTurnOrderEntry(participant, hasActed) {
-		const id = participant.token || -1;
+		const id = participant.token || '-1';
 		const custom = participant.name;
-		let pr;
-		if (hasActed === undefined) {
-			pr = '';
-		} else {
-			pr = hasActed ? CHECK_ON : CHECK_OFF;
-		}
+		const pr = hasActed ? CHECK_ON : CHECK_OFF;
 		return {
 			id: id,
 			custom: custom,
+			pr: pr
+		};
+	}
+
+	function buildMonstersTurnOrderEntry() {
+		const totalMonsterCount = participants().monsters.length;
+		const toActMonsterCount = roundInfo().toAct.filter(isMonster).length;
+		let pr;
+		debug('ToActMonsterCount ', toActMonsterCount);
+		if (toActMonsterCount === totalMonsterCount) {
+			pr = CHECK_OFF;
+		} else if (toActMonsterCount === 0) {
+			pr = CHECK_ON;
+		} else {
+			pr = CHECK_PART;
+		}
+		return {
+			id: '-1',
+			custom: MONSTER_GROUP,
 			pr: pr
 		};
 	}
@@ -296,30 +339,74 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		roundInfo().toAct = [];
 	}
 
-	function addToParticipants(newParticipants) {
-		// TODO if running, reprint turn info
-		debug('Adding participants...: ', newParticipants);
-		newParticipants.forEach(newParticipant => {
-			if (typeof newParticipant === 'object') {
-				addToken(newParticipant._id);
-			} else if (typeof newParticipant === 'string') {
-				addMonster(newParticipant);
-			}
-		});
-		debug('Added participants, participants now: ', participants());
+	function addTurnOrder() {
+		const groupByToken = entry => (entry.id !== -1 && entry.id !== '-1') ? 'tokens' : 'customs';
+		const turnOrder = _.groupBy(getTurnOrder(), groupByToken);
+		debug('Turnorder contains: ', turnOrder);
+
+		const tokens = turnOrder.tokens || [];
+		tokens.forEach(token => addTokenId(token.id, token.pr));
+
+		const customs = turnOrder.customs || [];
+		customs.forEach(custom => addName(custom.custom, custom.pr));
 	}
 
-	function addToken(id) {
+	function addName(name, initiative) {
+		addMonster({
+			id: name,
+			playerIds: [],
+			token: undefined,
+			name: name,
+			init: initiative
+		});
+	}
+
+	function addTokenId(id, initiative) {
 		const token = getObj('graphic', id);
-		if (token.get('_subtype') !== 'token') {
+		addToken(token, initiative);
+	}
+
+	function addToken(token, initiative) {
+		if (!token || token.get('_subtype') !== 'token') {
+			debug('Not a valid token: ', token);
 			return;
 		}
-		if (isPlayerControlled(token)) {
-			addPlayer(token);
-		} else {
-			addMonster(token);
+
+		if (initiative === undefined) {
+			initiative = getInitiativeForToken(token, initiative);
 		}
+
+		let playerIds;
+		let addFunc;
+		if (isPlayerControlled(token)) {
+			playerIds = getControllingPlayers(token);
+			addFunc = addPlayer;
+		} else {
+			playerIds = [];
+			addFunc = addMonster;
+		}
+		const id = token.get('_id');
+		addFunc({
+			id: id,
+			playerIds: playerIds,
+			token: id,
+			name: token.get('name'),
+			init: initiative
+		});
+
 	}
+
+	function getInitiativeForToken(token) {
+		const representedCharacter = token.get('represents');
+		const attrInitMod = getAttrByName(representedCharacter, 'initiative');
+		if (!attrInitMod) {
+			debug('Initiative modifier (', attrInitMod, ') missing, falling back to +0!');
+			// TODO error
+		}
+		const initMod = attrInitMod || '+0';
+		return 'd20' + initMod;
+	}
+
 
 	function isPlayerControlled(token) {
 		const playerIds = getControllingPlayers(token);
@@ -327,51 +414,40 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		return noGm.length > 0;
 	}
 
-	function addPlayer(token) {
-		const player = buildParticipantFromTokenOrString(token);
-		if (getParticipant(player.id)) {
-			debug('Player already added, skipping.');
-			return;
-		}
-		participants().players.push(player);
-		debug('Added player: "', player, '"');
+	function addPlayer(player) {
+		addParticipant(participants().players, player);
 	}
 
-	function addMonster(obj) {
-		const monster = buildParticipantFromTokenOrString(obj);
-		if (getParticipant(monster.id)) {
-			debug('Monster already added, skipping.');
-			return;
-		}
-		participants().monsters.push(monster);
-		if (monster.token) {
-			participants().monsterTokens[monster.token] = true;
-		}
-		debug('Added monster: "', monster, '"');
+	function addMonster(monster) {
+		const added = addParticipant(participants().monsters, monster, added => {
+			if (added && monster.token) {
+				participants().monsterTokens[monster.token] = true;
+			}
+		});
 	}
 
-	function buildParticipantFromTokenOrString(obj) {
-		if (typeof obj === 'object' && obj.get('subtype') === 'token') {
-			const token = obj;
-			const playerIds = isPlayerControlled(token) ? getControllingPlayers(token) : [];
-			const id = token.get('_id');
-			return {
-				id: id,
-				playerIds: playerIds,
-				token: id,
-				name: token.get('name'),
-				init: 0 // TODO set correct initiative
-			};
-		} else {
-			const name = '' + obj;
-			return {
-				id: name,
-				playerIds: [],
-				token: undefined,
-				name: name,
-				init: 0 // TODO set correct initiative
-			};
+	function addParticipant(list, participant, done) {
+		if (getParticipant(participant.id)) {
+			debug('participant already added, skipping.');
+			(done || _.identity)(false);
 		}
+		roll(participant.init, result => {
+			participant.init = result;
+			list.push(participant);
+			if (isCombatRunning()) {
+				roundInfo().toAct.push(participant);
+				participantsChanged();
+			}
+			debug('Added participant: "', participant, '"');
+			(done || _.identity)(participant);
+		});
+	}
+
+	function roll(query, callback) {
+		sendChat(CHAT_NAME, '/r ' + query, msg => {
+			const rollResult = JSON.parse(msg[0].content);
+			callback(rollResult.total);
+		});
 	}
 
 	function getControllingPlayers(token) {
@@ -419,7 +495,12 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			startNewRound();
 		}
 
-		debug('Giving turn to "', participant.name, '"...');
+		debug('Giving turn to "', participant, '"...');
+
+		if (participant === MONSTER_GROUP) {
+			sendGMChooseMonster();
+			return;
+		}
 
 		if (hasActed(participant)) {
 			debug(participant.name + ' already acted!');
@@ -434,23 +515,50 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		syncTurnOrder();
 
-		const canGiveTurnTo = getPossibleSuccessors();
+		const canGiveTurnTo = getPossibleSuccessors(participant);
 		debug('Can give turn to: ', canGiveTurnTo);
 		sendTurnInfo(participant, roundInfo().curRound, roundInfo().curTurn);
 		sendChoice(participant, canGiveTurnTo);
 	}
 
-	function getPossibleSuccessors() {
-		return areAllTurnsDone() ? getAllParticipants() : roundInfo().toAct;
+	function sendGMChooseMonster() {
+		const canGiveTurnTo = getPossibleSuccessors(MONSTER_GROUP);
+		const buttons = buildGiveTurnButtons(canGiveTurnTo);
+		const buttonsString = buttons.join(' ');
+		send('gm', 'Choose a monster to get the next turn: ' + buttonsString);
+	}
+
+	function getPossibleSuccessors(participant) {
+		if (participant === MONSTER_GROUP) {
+			return participants().monsters.filter(monster => {
+				return roundInfo().toAct.some(participantHasId(monster.id));
+			});
+		}
+		if (config.groupMonsters && isPlayer(participant)) {
+			if (areAllTurnsDone()) {
+				return participants().players.concat([MONSTER_GROUP]);
+			} else {
+				const amountLeft = roundInfo().toAct.length;
+				const playersToAct = roundInfo().toAct.filter(isPlayer);
+				return amountLeft - playersToAct.length === 0 ? playersToAct : playersToAct.concat([MONSTER_GROUP]);
+			}
+		} else {
+			return areAllTurnsDone() ? getAllParticipants() : roundInfo().toAct;
+		}
+	}
+
+	function isPlayer(participant) {
+		return _.negate(isMonster)(participant);
+	}
+
+	function isMonster(participant) {
+		return participant.playerIds.length === 0;
 	}
 
 	function sendChoice(participant, canGiveTurnTo) {
-		let recipients = participant.playerIds;
-		if (recipients.length === 0) {
+		let recipients = participant.playerIds.slice();
+		if (recipients.length === 0 || (DEBUG && recipients.indexOf(participants().gm) === -1)) {
 			recipients.push(participants().gm);
-		}
-		if (DEBUG) {
-			recipients = [participants().gm];
 		}
 		const buttons = buildGiveTurnButtons(canGiveTurnTo);
 		const buttonsString = buttons.join(' ');
@@ -460,15 +568,28 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function buildGiveTurnButtons(canGiveTurnTo) {
-		return canGiveTurnTo.map(participant => '[' + participant.name + '](' + COMMAND + ' giveturn ' + participant.id + ')');
+		return canGiveTurnTo.map(participant => {
+			let name;
+			let id;
+			if (participant === MONSTER_GROUP) {
+				name = MONSTER_GROUP;
+				id = MONSTER_GROUP;
+			} else {
+				name = participant.name;
+				id = participant.id;
+			}
+			return '[' + name + '](' + COMMAND + ' giveturn ' + id + ')';
+		});
 	}
 
 	function sendTurnInfo(participant, round, turn) {
-		sendInfo('Round ' + (round + 1) + ', Turn ' + (turn + 1) + '<br/> It\'s ' + participant.name + 's turn!');
+		let name = (config.groupMonsters && isMonster(participant)) ? 'the ' + MONSTER_GROUP : participant.name;
+		name = name.endsWith('s') ? name : (name + 's');
+		sendInfo('Round ' + (round + 1) + ', Turn ' + (turn + 1) + '<br/> It\'s ' + name + ' turn!');
 	}
 
 	function sendInfo(message) {
-		sendChat('Initiative', message, null, {noarchive: true});
+		sendChat(CHAT_NAME, message, null, {noarchive: true});
 	}
 
 	function hasActed(participant) {
@@ -527,16 +648,22 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		if (participants().monsterTokens[toRemove.tokenId]) {
 			participants().monsterTokens[toRemove.tokenId] = false;
 		}
+
+		participantsChanged();
+	}
+
+	function participantsChanged() {
 		if (getAllParticipants().length === 0) {
 			stopCombat();
-		} else if (roundInfo().curId === id) {
+		} else if (!getParticipant(roundInfo().curId)) {
 			if (roundInfo().toAct.length > 0) {
 				swapTurn(roundInfo().toAct[0]);
 			} else {
 				swapTurn(getHighestInit());
 			}
 		} else if (isCombatRunning()) {
-			sendChoice(getCurrentParticipant(), getPossibleSuccessors());
+			const curParticipant = getCurrentParticipant();
+			sendChoice(curParticipant, getPossibleSuccessors(curParticipant));
 		}
 
 		syncTurnOrder();
