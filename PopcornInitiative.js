@@ -19,23 +19,24 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		groupMonsters: true
 	};
 
-	state.PopcornInitiative = {};
-	state.PopcornInitiative.participantsVar = {};
-
+	state.PopcornInitiative = state.PopcornInitiative || {};
+	if (!state.PopcornInitiative.participantsVar) {
+		state.PopcornInitiative.participantsVar = {};
+		resetParticipants();
+	}
 	function participants() {
 		return state.PopcornInitiative.participantsVar;
 	}
 
-	resetParticipants();
-
-
-	state.PopcornInitiative.roundInfoVar = {};
+	if (!state.PopcornInitiative.roundInfoVar) {
+		state.PopcornInitiative.roundInfoVar = {};
+		resetRoundInfo();
+	}
 
 	function roundInfo() {
 		return state.PopcornInitiative.roundInfoVar;
 	}
 
-	resetRoundInfo();
 
 	state.PopcornInitiative.handleDeadToken = tokenDeadHandler;
 
