@@ -251,13 +251,13 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function startCombat() {
-		const players = participants().players.map(player => player.name + ' (Init: ' + player.init + ')');
+		const players = getPlayers().map(player => player.name + ' (Init: ' + player.init + ')');
 		const playerMessage = 'Starting combat with ' + players.length + ' player' + ((players.length !== 1) ? 's' : '') + ': ' + players.join(', ');
 		const hfgl = '! Have fun ;)';
 		if (config.groupEnemies) {
 			sendInfo(playerMessage + hfgl);
 		} else {
-			const enemies = participants().enemies.map(enemy => enemy.name + ' (Init: ' + enemy.init + ')');
+			const enemies = getEnemies().map(enemy => enemy.name + ' (Init: ' + enemy.init + ')');
 			const enemyMessage = enemies.length + ' enemy' + ((enemies.length !== 1) ? 's' : '') + ': ' + enemies.join(', ');
 			sendInfo(playerMessage + ' and ' + enemyMessage + hfgl);
 		}
@@ -295,7 +295,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		let restTurnOrderEntries;
 		if (config.groupEnemies) {
-			restTurnOrderEntries = buildTurnOrderEntries(participants().players);
+			restTurnOrderEntries = buildTurnOrderEntries(getPlayers());
 			debug('Rest players: ', restTurnOrderEntries);
 			if (isPlayer(currentParticipant)) {
 				debug('Add enemies');
@@ -343,7 +343,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function buildEnemiesTurnOrderEntry() {
-		const totalEnemyCount = participants().enemies.length;
+		const totalEnemyCount = getEnemies().length;
 		const toActEnemyCount = roundInfo().toAct.filter(isEnemy).length;
 		let pr;
 		debug('ToActEnemyCount ', toActEnemyCount);
@@ -585,7 +585,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function getAllParticipants() {
-		return participants().players.concat(participants().enemies);
+		return getPlayers().concat(getEnemies());
 	}
 
 	function getHighestInit() {
@@ -645,16 +645,16 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	function getPossibleSuccessors(participant) {
 		if (participant === ENEMY_GROUP) {
 			if (roundInfo().toAct.length === 0) {
-				return participants().enemies;
+				return getEnemies();
 			} else {
-				return participants().enemies.filter(enemy => {
+				return getEnemies().filter(enemy => {
 					return roundInfo().toAct.some(participantHasID(enemy.id));
 				});
 			}
 		}
 		if (config.groupEnemies && isPlayer(participant)) {
 			if (areAllTurnsDone()) {
-				return participants().players.concat([ENEMY_GROUP]);
+				return getPlayers().concat([ENEMY_GROUP]);
 			} else {
 				const amountLeft = roundInfo().toAct.length;
 				const playersToAct = roundInfo().toAct.filter(isPlayer);
@@ -738,10 +738,17 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		sendActedStatus(playerID);
 	}
 
+	function getPlayers() {
+		return participants().players.slice();
+	}
+	function getEnemies() {
+		return participants().enemies.slice();
+	}
+
 	function sendParticipantsStatus(playerID) {
-		let visibleParticipants = participants().players;
+		let visibleParticipants = getPlayers();
 		if (!config.groupEnemies || playerIsGM(playerID)) {
-			visibleParticipants.push(...participants().enemies);
+			visibleParticipants.push(...getEnemies());
 		} else {
 			visibleParticipants.push({name: 'a bunch of enemies'});
 		}
