@@ -16,6 +16,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	on("change:graphic:status_dead", tokenDeadHandler);
 
 	let config = {
+		// NOT grouping the monsters currently does not make sense, and maybe will never. The problem that would have to be solved is
+		// monsters on the GM layer.
+		// Monsters on the GM layer are not shown to the players, and shouldn't be shown to the players for selecting in popcorn initiative.
+		// But that's problematic: what happens when it's a player's turn and there are only hidden monsters left?
+		// As such, thsi will probably remain "true" or may even be removed...
 		groupMonsters: true
 	};
 
