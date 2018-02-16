@@ -134,6 +134,15 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				send(playerID, 'Can not give turn to ' + participant.name + ' : <br />' + errors);
 			}
 		},
+		reset: msg => {
+			const playerID = msg.playerid;
+			if (!playerIsGM(playerID)) {
+				send(playerID, 'Only the GM can reset the popcorn initiative.');
+			}
+			resetParticipants();
+			resetRoundInfo();
+			send(playerID, 'Popcorn initiative has been reset.');
+		},
 		status: msg => {
 			// TODO pretty print
 			debug('Current participants: ', participants());
