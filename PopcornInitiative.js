@@ -43,6 +43,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 
+
 	state.PopcornInitiative.handleDeadToken = tokenDeadHandler;
 
 	const handlers = {
@@ -54,13 +55,27 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			const selection = getCurrentSelection(msg);
 			const tokens = selection.filter(selected => selected._type === 'graphic');
 			if (tokens.length === 0) {
-				debug('Add: no token selected!');
-				// TODO error
+				send(msg.playerid, 'No token selected!');
 				return;
 			}
-			const tokenIds = tokens.map(token => token._id);
 			const initiative = getOption(msg, 0);
-			tokenIds.forEach(id => addTokenId(id, initiative));
+			tokens.forEach(selectedToken => {
+				const token = getObj('graphic', selectedToken._id);
+				addToken(token, initiative).then(result => {
+					const participant = result.result;
+					if (result.errors.length > 0) {
+						const errors = result.errors.join('<br />');
+						const tokenName = (token && token.get) ? token.get('name') : token;
+						send(msg.playerid, 'Could not add token ' + tokenName + ', errors: <br />' + errors);
+					} else if (result.warnings.length > 0) {
+						const warnings = result.warnings.join('<br />');
+						const content = 'Added ' + participant.name + ', initiative ' + participant.init + ' with warnings: <br />' + warnings;
+						send(msg.playerid, content);
+					} else {
+						send(msg.playerid, 'Added ' + participant.name + ' with initiative ' + participant.init + '.');
+					}
+				});
+			});
 		},
 		remove: msg => {
 			if (!playerIsGM(msg.playerid)) {
@@ -82,12 +97,10 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			if (!playerIsGM(msg.playerid)) {
 				return;
 			}
-			participants().gm = msg.playerid;
 
-			addTurnOrder().then(() => {
+			addTurnOrder(msg).then(() => {
 				if (getAllParticipants().length === 0) {
-					debug('Trying to start combat with no participants!');
-					// TODO error
+					send(msg.playerid, 'Trying to start combat with no participants!');
 					return;
 				}
 				debug('Starting new combat...');
@@ -102,21 +115,24 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 			stopCombat();
 		},
-		giveturn: msg => {
+		giveturnAPI: msg => {
 			const playerId = msg.playerid;
-			if (!playerIsGM(playerId) && !isPlayersTurn(playerId)) {
-				debug('Player ', msg.who, ' tried to give turn over, but is not GM or it\'s not his turn.');
-				// TODO error
+			if (!isPlayersTurn(playerId)) {
+				debug('Player ', msg.who, ' tried to give turn over, but it\'s not his turn.');
+				send(msg.playerid, 'It\'s not your turn!');
 				return;
 			}
 			const option = getOption(msg, 0);
 			let participant = (config.groupEnemies && option === ENEMY_GROUP) ? ENEMY_GROUP : getParticipant(option);
 			if (!participant) {
-				debug('Tried to give turn to ', option, ' but that\'s not a valid participant');
-				// TODO error
+				send(msg.playerid, 'You tried to give turn to ', option, ' but a participant with that ID does not exist!');
 				return;
 			}
-			giveTurn(participant);
+			const result = giveTurn(participant);
+			if (result.errors.length > 0) {
+				const errors = result.errors.join('<br />');
+				send(playerId, 'Can not give turn to ' + participant.name + ' : <br />' + errors);
+			}
 		},
 		status: msg => {
 			// TODO pretty print
@@ -191,14 +207,14 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		handler(msg);
 	}
 
-	function debug() {
+
+	function debug(...args) {
 		if (!DEBUG || !DEBUG_LOG) {
 			return;
 		}
 		// for roll20: $('#consolepanel').before('<button onclick=ace.edit("apiconsole").setValue("")>Clear</button>')
-		const args = (arguments.length === 1 ? [arguments[0]] : Array.apply(null, arguments));
 		let message = '';
-		if (arguments.length === 0) {
+		if (args.length === 0) {
 			message = 'Debug message missing!';
 		} else {
 			message = args.map(arg => (typeof arg === 'object') ? JSON.stringify(arg, null, 4) : arg)
@@ -222,10 +238,26 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function startCombat() {
+		const players = participants().players.map(player => player.name + ' (Init: ' + player.init + ')');
+		const playerMessage = 'Starting combat with ' + players.length + ' player' + ((players.length !== 1) ? 's' : '') + ': ' + players.join(', ');
+		const hfgl = '! Have fun ;)';
+		if (config.groupEnemies) {
+			sendInfo(playerMessage + hfgl);
+		} else {
+			const enemies = participants().enemies.map(enemy => enemy.name + ' (Init: ' + enemy.init + ')');
+			const enemyMessage = enemies.length + ' enemy' + ((enemies.length !== 1) ? 's' : '') + ': ' + enemies.join(', ');
+			sendInfo(playerMessage + ' and ' + enemyMessage + hfgl);
+		}
 		showTurnOrder();
 		resetRoundInfo();
 		startNewRound();
-		giveTurn(getHighestInit());
+		const highestInit = getHighestInit();
+		if (config.groupEnemies && isEnemy(highestInit)) {
+			sendInfo('An enemy won initiative with a ' + highestInit.init + ' and will start the combat!');
+		} else {
+			sendInfo(highestInit.name + ' won initiative with a ' + highestInit.init + '!');
+		}
+		giveTurn(highestInit);
 	}
 
 	function getTurnOrder() {
@@ -250,7 +282,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		let restTurnOrderEntries;
 		if (config.groupEnemies) {
-			restTurnOrderEntries = buildTurnOrderEntries(participants().players, currentParticipant);
+			restTurnOrderEntries = buildTurnOrderEntries(participants().players);
 			debug('Rest players: ', restTurnOrderEntries);
 			if (isPlayer(currentParticipant)) {
 				debug('Add enemies');
@@ -258,14 +290,14 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				debug('Rest players: ', restTurnOrderEntries);
 			}
 		} else {
-			restTurnOrderEntries = buildTurnOrderEntries(getAllParticipants(), currentParticipant);
+			const allWithoutCurrent = getAllParticipants.filter(_.negate(participantHasId(currentParticipant.id)));
+			restTurnOrderEntries = buildTurnOrderEntries(allWithoutCurrent);
 		}
 		return [currentEntry].concat(restTurnOrderEntries);
 	}
 
-	function buildTurnOrderEntries(participants, currentParticipant) {
-		const allWithoutCurrent = participants.filter(_.negate(participantHasId(currentParticipant.id)));
-		let allWithActed = allWithoutCurrent.map(participant => {
+	function buildTurnOrderEntries(participants) {
+		let allWithActed = participants.map(participant => {
 			return {
 				obj: participant,
 				hasActed: hasActed(participant)
@@ -335,7 +367,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		participants().players = [];
 		participants().enemies = [];
 		participants().enemyTokens = {};
-		participants().gm = undefined;
+		participants().GMs = findGMs();
 	}
 
 	function resetRoundInfo() {
@@ -345,18 +377,36 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		roundInfo().toAct = [];
 	}
 
-	function addTurnOrder() {
-		const groupByToken = entry => (entry.id !== -1 && entry.id !== '-1') ? 'tokens' : 'customs';
-		const turnOrder = _.groupBy(getTurnOrder(), groupByToken);
-		debug('Turnorder contains: ', turnOrder);
+	function findGMs() {
+		return findObjs({_type: 'player'})
+			.map(player => player.get('_id'))
+			.filter(playerIsGM);
+	}
 
-		const tokens = turnOrder.tokens || [];
-		const tokenPromises = tokens.map(token => addTokenId(token.id, token.pr));
+	function addTurnOrder(msg) {
+		const isToken = entry => (entry.id !== -1 && entry.id !== '-1');
+		const tokens = getTurnOrder().filter(isToken);
+		debug('Turnorder contains tokens: ', tokens);
 
-		const customs = turnOrder.customs || [];
-		const customsPromises = customs.forEach(custom => addName(custom.custom, custom.pr));
+		const tokenPromises = tokens.map(token => {
+			return addTokenId(token.id, token.pr).then(result => {
+				const tokenString = token && token.JSON.stringify(token);
+				if (result.errors.length > 0) {
+					const errors = result.errors.map(messageToString).join('<br />');
+					send(msg.playerid, 'Error(s) while adding token \'' + tokenString + '\': <br />' + errors);
+				}
+				if (result.warnings.length > 0) {
+					const warnings = result.warnings.map(messageToString).join('<br />');
+					send(msg.playerid, 'Warning(s) while adding token \'' + tokenString + '\': <br />' + warnings);
+				}
+			});
+		});
 
-		return Promise.all(tokenPromises.concat(customsPromises));
+		return Promise.all(tokenPromises);
+	}
+
+	function messageToString(message) {
+		return message.msg;
 	}
 
 	function addName(name, initiative) {
@@ -377,11 +427,17 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	function addToken(token, initiative) {
 		if (!token || token.get('_subtype') !== 'token') {
 			debug('Not a valid token: ', token);
-			return;
+			return new Promise(((resolve) => {
+				resolve(buildResult(undefined, ['Not a valid token!']));
+			}));
 		}
 
+		let result = buildResult();
+
 		if (initiative === undefined) {
-			initiative = getInitiative(token);
+			const initResult = getInitiative(token);
+			addMessagesFromResult(result, initResult);
+			initiative = initResult.result;
 		}
 
 		let playerIds;
@@ -394,7 +450,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			addFunc = addEnemy;
 		}
 		const id = token.get('_id');
-		return addFunc({
+		const addPromise = addFunc({
 			id: id,
 			playerIds: playerIds,
 			token: id,
@@ -402,17 +458,33 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			init: initiative
 		});
 
+		const addResults = addResult => {
+			return addMessagesFromResult(addResult, result);
+		};
+		return addPromise.then(addResults, addResults);
+	}
+
+	function addMessagesFromResult(result, msgResult) {
+		result.warnings.push(...msgResult.warnings);
+		result.errors.push(...msgResult.errors);
+		return result;
 	}
 
 	function getInitiative(token) {
+		let result = buildMsgResult();
+		let attrInitMod;
 		const representedCharacter = token.get('represents');
-		const attrInitMod = getAttrByName(representedCharacter, 'initiative');
-		if (!attrInitMod) {
-			debug('Initiative modifier (', attrInitMod, ') missing, falling back to +0!');
-			// TODO error
+		if (!representedCharacter) {
+			result.warnings.push('Token ' + token.get('name') + ' represents no character, using 1d20+0 as initiative.');
+		} else {
+			attrInitMod = getAttrByName(representedCharacter, 'initiative');
+			if (!attrInitMod) {
+				result.warnings.push('Initiative modifier missing, falling back to +0!');
+			}
 		}
 		const initMod = attrInitMod || '+0';
-		return 'd20' + initMod;
+		result.result = 'd20' + initMod;
+		return result;
 	}
 
 
@@ -436,15 +508,27 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		return result;
 	}
 
+	function buildMsgResult(errors, warnings) {
+		return {
+			errors: errors || [],
+			warnings: warnings || []
+		};
+	}
+
+	function buildResult(value, errors, warnings) {
+		const result = buildMsgResult(errors, warnings);
+		result.result = value;
+		return result;
+	}
+
 	function addParticipant(list, participant) {
 
-		return new Promise((resolve, reject) => {
+		return new Promise((resolve) => {
 			if (getParticipant(participant.id)) {
-				debug('participant already added, skipping.');
-				reject();
+				resolve(buildMsgResult('Participant already added'));
 			}
-			roll(participant.init, result => {
-				participant.init = result;
+			roll(participant.init, roll => {
+				participant.init = roll;
 				const insertIdx = _.sortedIndex(list, participant, 'name');
 				list.splice(insertIdx, 0, participant);
 				if (isCombatRunning()) {
@@ -452,7 +536,9 @@ var PopcornInitiative = PopcornInitiative || (function() {
 					participantsChanged();
 				}
 				debug('Added participant: "', participant, '"');
-				resolve(participant);
+				const result = buildResult(participant);
+				debug('addParticipant result: ', result);
+				resolve(result);
 			});
 		});
 	}
@@ -512,14 +598,14 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		debug('Giving turn to "', participant, '"...');
 
 		if (participant === ENEMY_GROUP) {
+			roundInfo().curId = ENEMY_GROUP;
 			sendGMChooseEnemy();
-			return;
+			return buildResult();
 		}
 
 		if (hasActed(participant)) {
 			debug(participant.name + ' already acted!');
-			// TODO error
-			return;
+			return buildMsgResult([participant.name + ' already acted during this turn!']);
 		}
 
 		roundInfo().curId = participant.id;
@@ -533,20 +619,26 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		debug('Can give turn to: ', canGiveTurnTo);
 		sendTurnInfo(participant, roundInfo().curRound, roundInfo().curTurn);
 		sendChoice(participant, canGiveTurnTo);
+
+		return buildResult();
 	}
 
 	function sendGMChooseEnemy() {
-		const canGiveTurnTo = getPossibleSuccessors(ENEMY_GROUP);
+		const canGiveTurnTo =  getPossibleSuccessors(ENEMY_GROUP);
 		const buttons = buildGiveTurnButtons(canGiveTurnTo);
 		const buttonsString = buttons.join(' ');
-		send('gm', 'Choose a enemy to get the next turn: ' + buttonsString);
+		send('gm', 'Choose an enemy to get the next turn: ' + buttonsString);
 	}
 
 	function getPossibleSuccessors(participant) {
 		if (participant === ENEMY_GROUP) {
-			return participants().enemies.filter(enemy => {
-				return roundInfo().toAct.some(participantHasId(enemy.id));
-			});
+			if (roundInfo().toAct.length === 0) {
+				return participants().enemies;
+			} else {
+				return participants().enemies.filter(enemy => {
+					return roundInfo().toAct.some(participantHasId(enemy.id));
+				});
+			}
 		}
 		if (config.groupEnemies && isPlayer(participant)) {
 			if (areAllTurnsDone()) {
@@ -569,15 +661,24 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		return participant.playerIds.length === 0;
 	}
 
+
+
 	function sendChoice(participant, canGiveTurnTo) {
-		let recipients = participant.playerIds.slice();
-		if (recipients.length === 0 || (DEBUG && recipients.indexOf(participants().gm) === -1)) {
-			recipients.push(participants().gm);
-		}
+
 		const buttons = buildGiveTurnButtons(canGiveTurnTo);
 		const buttonsString = buttons.join(' ');
+
+		sendParticipant(participant, 'Give turn to <br />' + buttonsString);
+	}
+
+	function sendParticipant(participant, message) {
+		let recipients = participant.playerIds.slice();
+		if (recipients.length === 0 || (DEBUG && recipients.indexOf(participants().GMs) === -1)) {
+			recipients = recipients.concat(participants().GMs);
+		}
+
 		recipients.forEach(recipient => {
-			send(recipient, 'Give turn to <br />' + buttonsString);
+			send(recipient, message);
 		});
 	}
 
@@ -592,7 +693,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				name = participant.name;
 				id = participant.id;
 			}
-			return '[' + name + '](' + COMMAND + ' giveturn ' + id + ')';
+			return '[' + name + '](' + COMMAND + ' giveturnAPI ' + id + ')';
 		});
 	}
 
@@ -604,6 +705,10 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	function sendInfo(message) {
 		sendChat(CHAT_NAME, message, null, {noarchive: true});
+	}
+
+	function sendResult(result) {
+
 	}
 
 	function hasActed(participant) {
@@ -621,8 +726,12 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function isPlayersTurn(playerId) {
-		const curParticipant = getParticipant(roundInfo().curId);
-		return curParticipant.playerIds.includes(playerId);
+		const curParticipant = getCurrentParticipant();
+		if (playerIsGM(playerId)) {
+			return isEnemy(curParticipant);
+		} else {
+			return curParticipant.playerIds.includes(playerId);
+		}
 	}
 
 	function areAllTurnsDone() {
@@ -638,17 +747,22 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			return;
 		}
 		const id = graphic.get('_id');
-		const tokenIsEnemyParticipant = participants().enemyTokens[id];
-		if (!tokenIsEnemyParticipant) {
+		const tokenIsEnemy = participants().enemyTokens[id];
+		if (!tokenIsEnemy) {
 			return;
 		}
+		const currentParticipant = getCurrentParticipant();
+		const participant = getAllParticipants().find(participant => participant.token === id);
+		if (!config.groupEnemies || isEnemy(currentParticipant)) {
+			sendParticipant(currentParticipant, participant.name + ' died, these are the new choices:');
+		}
 
-		removeByTokenId(id);
+		remove(participant);
 	}
 
 	function removeByTokenId(tokenId) {
 		const participant = getAllParticipants().find(participant => participant.token === tokenId);
-		removeById(participant.id);
+		remove(participant);
 	}
 
 	function participantHasId(id) {
@@ -656,16 +770,20 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function removeById(id) {
-		const shouldKeepParticipant = _.negate(participantHasId(id));
 		const toRemove = getAllParticipants().find(participantHasId(id));
 		if (!toRemove) {
 			return;
 		}
+		remove(toRemove);
+	}
+
+	function remove(participant) {
+		const shouldKeepParticipant = _.negate(participantHasId(participant.id));
 		participants().players = participants().players.filter(shouldKeepParticipant);
 		participants().enemies = participants().enemies.filter(shouldKeepParticipant);
 		roundInfo().toAct = roundInfo().toAct.filter(shouldKeepParticipant);
-		if (participants().enemyTokens[toRemove.tokenId]) {
-			participants().enemyTokens[toRemove.tokenId] = false;
+		if (participants().enemyTokens[participant.tokenId]) {
+			participants().enemyTokens[participant.tokenId] = false;
 		}
 
 		participantsChanged();
@@ -674,7 +792,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	function participantsChanged() {
 		if (getAllParticipants().length === 0) {
 			stopCombat();
-		} else if (!getParticipant(roundInfo().curId)) {
+		} else if (!getCurrentParticipant()) {
 			if (roundInfo().toAct.length > 0) {
 				swapTurn(roundInfo().toAct[0]);
 			} else {
@@ -682,7 +800,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 		} else if (isCombatRunning()) {
 			const curParticipant = getCurrentParticipant();
-			sendChoice(curParticipant, getPossibleSuccessors(curParticipant));
+			if (curParticipant.id === ENEMY_GROUP) {
+				sendGMChooseEnemy();
+			} else {
+				sendChoice(curParticipant, getPossibleSuccessors(curParticipant));
+			}
 		}
 
 		syncTurnOrder();
@@ -694,10 +816,21 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function getCurrentParticipant() {
-		return getParticipant(roundInfo().curId);
+		if (roundInfo().curId === ENEMY_GROUP) {
+			return {
+				id: ENEMY_GROUP,
+				name: ENEMY_GROUP,
+				playerIds: [],
+				token: undefined,
+				init: 0
+			};
+		} else {
+			return getParticipant(roundInfo().curId);
+		}
 	}
 
 	function stopCombat() {
+		sendInfo('Ending combat. Hopefully no player died!');
 		resetParticipants();
 		resetRoundInfo();
 		resetTurnOrder();
