@@ -1,6 +1,7 @@
 /* jshint -W132 */
 var PopcornInitiative = PopcornInitiative || (function() {
 	const DEBUG = true;
+	const DEBUG_LOG = false;
 
 	const COMMAND = '!pci';
 	const CHAT_NAME = 'Initiative';
@@ -192,7 +193,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function debug() {
-		if (!DEBUG) {
+		if (!DEBUG || !DEBUG_LOG) {
 			return;
 		}
 		// for roll20: $('#consolepanel').before('<button onclick=ace.edit("apiconsole").setValue("")>Clear</button>')
