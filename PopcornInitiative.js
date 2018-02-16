@@ -147,22 +147,6 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			// TODO pretty print
 			debug('Current participants: ', participants());
 			debug('Current round status: ', roundInfo());
-		},
-		debug: msg => {
-			if (!playerIsGM(msg.playerid)) {
-				return;
-			}
-			const id = getOption(msg, 0);
-			if (!id) {
-				return;
-			}
-
-			debug(findObjs({
-				_id: id
-			}));
-		},
-		selection: msg => {
-			debug(getCurrentSelection(msg));
 		}
 	};
 
