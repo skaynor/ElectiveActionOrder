@@ -10,19 +10,18 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	const CHECK_PART = '▣';
 	const CHECK_ON = '☑';
 
-	const MONSTER_GROUP = 'Monsters';
+	const ENEMY_GROUP = 'Enemies';
 
 	on('chat:message', messageHandler);
 
 	on("change:graphic:status_dead", tokenDeadHandler);
 
 	let config = {
-		// NOT grouping the monsters currently does not make sense, and maybe will never. The problem that would have to be solved is
-		// monsters on the GM layer.
-		// Monsters on the GM layer are not shown to the players, and shouldn't be shown to the players for selecting in popcorn initiative.
-		// But that's problematic: what happens when it's a player's turn and there are only hidden monsters left?
-		// As such, thsi will probably remain "true" or may even be removed...
-		groupMonsters: true
+		// In normal initiative, enemies on the GM layer are not shown to the players.
+		// However, this can not be implemented in popcorn initiative: what happens when it's a player's turn and there are only hidden enemies left?
+		// The only real solution is for the DM to only add tokens to initiative when they should be shown to the players, disabling the
+		// possibility for hidden tokens, which is how it's implemented.
+		groupEnemies: true
 	};
 
 	state.PopcornInitiative = state.PopcornInitiative || {};
@@ -111,7 +110,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				return;
 			}
 			const option = getOption(msg, 0);
-			let participant = (config.groupMonsters && option === MONSTER_GROUP) ? MONSTER_GROUP : getParticipant(option);
+			let participant = (config.groupEnemies && option === ENEMY_GROUP) ? ENEMY_GROUP : getParticipant(option);
 			if (!participant) {
 				debug('Tried to give turn to ', option, ' but that\'s not a valid participant');
 				// TODO error
@@ -242,20 +241,20 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		const currentParticipant = getCurrentParticipant();
 
 		let currentEntry;
-		if (config.groupMonsters && isMonster(currentParticipant)) {
-			currentEntry = buildMonstersTurnOrderEntry();
+		if (config.groupEnemies && isEnemy(currentParticipant)) {
+			currentEntry = buildEnemiesTurnOrderEntry();
 		} else {
 			currentEntry = buildTurnOrderEntry(currentParticipant, true);
 		}
 		currentEntry.pr = '';
 
 		let restTurnOrderEntries;
-		if (config.groupMonsters) {
+		if (config.groupEnemies) {
 			restTurnOrderEntries = buildTurnOrderEntries(participants().players, currentParticipant);
 			debug('Rest players: ', restTurnOrderEntries);
 			if (isPlayer(currentParticipant)) {
-				debug('Add monsters');
-				restTurnOrderEntries.push(buildMonstersTurnOrderEntry());
+				debug('Add enemies');
+				restTurnOrderEntries.push(buildEnemiesTurnOrderEntry());
 				debug('Rest players: ', restTurnOrderEntries);
 			}
 		} else {
@@ -298,21 +297,21 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		};
 	}
 
-	function buildMonstersTurnOrderEntry() {
-		const totalMonsterCount = participants().monsters.length;
-		const toActMonsterCount = roundInfo().toAct.filter(isMonster).length;
+	function buildEnemiesTurnOrderEntry() {
+		const totalEnemyCount = participants().enemies.length;
+		const toActEnemyCount = roundInfo().toAct.filter(isEnemy).length;
 		let pr;
-		debug('ToActMonsterCount ', toActMonsterCount);
-		if (toActMonsterCount === totalMonsterCount) {
+		debug('ToActEnemyCount ', toActEnemyCount);
+		if (toActEnemyCount === totalEnemyCount) {
 			pr = CHECK_OFF;
-		} else if (toActMonsterCount === 0) {
+		} else if (toActEnemyCount === 0) {
 			pr = CHECK_ON;
 		} else {
 			pr = CHECK_PART;
 		}
 		return {
 			id: '-1',
-			custom: MONSTER_GROUP,
+			custom: ENEMY_GROUP,
 			pr: pr
 		};
 	}
@@ -334,8 +333,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	function resetParticipants() {
 		participants().players = [];
-		participants().monsters = [];
-		participants().monsterTokens = {};
+		participants().enemies = [];
+		participants().enemyTokens = {};
 		participants().gm = undefined;
 	}
 
@@ -361,7 +360,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function addName(name, initiative) {
-		return addMonster({
+		return addEnemy({
 			id: name,
 			playerIds: [],
 			token: undefined,
@@ -392,7 +391,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			addFunc = addPlayer;
 		} else {
 			playerIds = [];
-			addFunc = addMonster;
+			addFunc = addEnemy;
 		}
 		const id = token.get('_id');
 		return addFunc({
@@ -427,10 +426,10 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		return addParticipant(participants().players, player);
 	}
 
-	function addMonster(monster) {
-		return addParticipant(participants().monsters, monster).then(() => {
-			if (monster.token) {
-				participants().monsterTokens[monster.token] = true;
+	function addEnemy(enemy) {
+		return addParticipant(participants().enemies, enemy).then(() => {
+			if (enemy.token) {
+				participants().enemyTokens[enemy.token] = true;
 			}
 		});
 	}
@@ -486,7 +485,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function getAllParticipants() {
-		return participants().players.concat(participants().monsters);
+		return participants().players.concat(participants().enemies);
 	}
 
 	function getHighestInit() {
@@ -510,8 +509,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		debug('Giving turn to "', participant, '"...');
 
-		if (participant === MONSTER_GROUP) {
-			sendGMChooseMonster();
+		if (participant === ENEMY_GROUP) {
+			sendGMChooseEnemy();
 			return;
 		}
 
@@ -534,26 +533,26 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		sendChoice(participant, canGiveTurnTo);
 	}
 
-	function sendGMChooseMonster() {
-		const canGiveTurnTo = getPossibleSuccessors(MONSTER_GROUP);
+	function sendGMChooseEnemy() {
+		const canGiveTurnTo = getPossibleSuccessors(ENEMY_GROUP);
 		const buttons = buildGiveTurnButtons(canGiveTurnTo);
 		const buttonsString = buttons.join(' ');
-		send('gm', 'Choose a monster to get the next turn: ' + buttonsString);
+		send('gm', 'Choose a enemy to get the next turn: ' + buttonsString);
 	}
 
 	function getPossibleSuccessors(participant) {
-		if (participant === MONSTER_GROUP) {
-			return participants().monsters.filter(monster => {
-				return roundInfo().toAct.some(participantHasId(monster.id));
+		if (participant === ENEMY_GROUP) {
+			return participants().enemies.filter(enemy => {
+				return roundInfo().toAct.some(participantHasId(enemy.id));
 			});
 		}
-		if (config.groupMonsters && isPlayer(participant)) {
+		if (config.groupEnemies && isPlayer(participant)) {
 			if (areAllTurnsDone()) {
-				return participants().players.concat([MONSTER_GROUP]);
+				return participants().players.concat([ENEMY_GROUP]);
 			} else {
 				const amountLeft = roundInfo().toAct.length;
 				const playersToAct = roundInfo().toAct.filter(isPlayer);
-				return amountLeft - playersToAct.length === 0 ? playersToAct : playersToAct.concat([MONSTER_GROUP]);
+				return amountLeft - playersToAct.length === 0 ? playersToAct : playersToAct.concat([ENEMY_GROUP]);
 			}
 		} else {
 			return areAllTurnsDone() ? getAllParticipants() : roundInfo().toAct;
@@ -561,10 +560,10 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function isPlayer(participant) {
-		return _.negate(isMonster)(participant);
+		return _.negate(isEnemy)(participant);
 	}
 
-	function isMonster(participant) {
+	function isEnemy(participant) {
 		return participant.playerIds.length === 0;
 	}
 
@@ -584,9 +583,9 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		return canGiveTurnTo.map(participant => {
 			let name;
 			let id;
-			if (participant === MONSTER_GROUP) {
-				name = MONSTER_GROUP;
-				id = MONSTER_GROUP;
+			if (participant === ENEMY_GROUP) {
+				name = ENEMY_GROUP;
+				id = ENEMY_GROUP;
 			} else {
 				name = participant.name;
 				id = participant.id;
@@ -596,7 +595,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function sendTurnInfo(participant, round, turn) {
-		let name = (config.groupMonsters && isMonster(participant)) ? 'the ' + MONSTER_GROUP : participant.name;
+		let name = (config.groupEnemies && isEnemy(participant)) ? 'the ' + ENEMY_GROUP : participant.name;
 		name = name.endsWith('s') ? name : (name + 's');
 		sendInfo('Round ' + (round + 1) + ', Turn ' + (turn + 1) + '<br/> It\'s ' + name + ' turn!');
 	}
@@ -637,8 +636,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			return;
 		}
 		const id = graphic.get('_id');
-		const tokenIsMonsterParticipant = participants().monsterTokens[id];
-		if (!tokenIsMonsterParticipant) {
+		const tokenIsEnemyParticipant = participants().enemyTokens[id];
+		if (!tokenIsEnemyParticipant) {
 			return;
 		}
 
@@ -661,10 +660,10 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			return;
 		}
 		participants().players = participants().players.filter(shouldKeepParticipant);
-		participants().monsters = participants().monsters.filter(shouldKeepParticipant);
+		participants().enemies = participants().enemies.filter(shouldKeepParticipant);
 		roundInfo().toAct = roundInfo().toAct.filter(shouldKeepParticipant);
-		if (participants().monsterTokens[toRemove.tokenId]) {
-			participants().monsterTokens[toRemove.tokenId] = false;
+		if (participants().enemyTokens[toRemove.tokenId]) {
+			participants().enemyTokens[toRemove.tokenId] = false;
 		}
 
 		participantsChanged();
