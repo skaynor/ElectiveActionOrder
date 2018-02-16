@@ -85,17 +85,17 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 			participants().gm = msg.playerid;
 
-			addTurnOrder();
+			addTurnOrder().then(() => {
+				if (getAllParticipants().length === 0) {
+					debug('Trying to start combat with no participants!');
+					// TODO error
+					return;
+				}
+				debug('Starting new combat...');
+				debug('Participants: ', participants());
 
-			if (getAllParticipants().length === 0) {
-				debug('Trying to start combat with no participants!');
-				// TODO error
-				return;
-			}
-			debug('Starting new combat...');
-			debug('Participants: ', participants());
-
-			startCombat();
+				startCombat();
+			});
 		},
 		stop: msg => {
 			if (!playerIsGM(msg.playerid)) {
@@ -352,14 +352,16 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		debug('Turnorder contains: ', turnOrder);
 
 		const tokens = turnOrder.tokens || [];
-		tokens.forEach(token => addTokenId(token.id, token.pr));
+		const tokenPromises = tokens.map(token => addTokenId(token.id, token.pr));
 
 		const customs = turnOrder.customs || [];
-		customs.forEach(custom => addName(custom.custom, custom.pr));
+		const customsPromises = customs.forEach(custom => addName(custom.custom, custom.pr));
+
+		return Promise.all(tokenPromises.concat(customsPromises));
 	}
 
 	function addName(name, initiative) {
-		addMonster({
+		return addMonster({
 			id: name,
 			playerIds: [],
 			token: undefined,
@@ -370,7 +372,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	function addTokenId(id, initiative) {
 		const token = getObj('graphic', id);
-		addToken(token, initiative);
+		return addToken(token, initiative);
 	}
 
 	function addToken(token, initiative) {
@@ -380,7 +382,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		if (initiative === undefined) {
-			initiative = getInitiativeForToken(token, initiative);
+			initiative = getInitiative(token);
 		}
 
 		let playerIds;
@@ -393,7 +395,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			addFunc = addMonster;
 		}
 		const id = token.get('_id');
-		addFunc({
+		return addFunc({
 			id: id,
 			playerIds: playerIds,
 			token: id,
@@ -403,7 +405,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	}
 
-	function getInitiativeForToken(token) {
+	function getInitiative(token) {
 		const representedCharacter = token.get('represents');
 		const attrInitMod = getAttrByName(representedCharacter, 'initiative');
 		if (!attrInitMod) {
@@ -422,32 +424,35 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function addPlayer(player) {
-		addParticipant(participants().players, player);
+		return addParticipant(participants().players, player);
 	}
 
 	function addMonster(monster) {
-		const added = addParticipant(participants().monsters, monster, added => {
-			if (added && monster.token) {
+		return addParticipant(participants().monsters, monster).then(() => {
+			if (monster.token) {
 				participants().monsterTokens[monster.token] = true;
 			}
 		});
 	}
 
-	function addParticipant(list, participant, done) {
-		if (getParticipant(participant.id)) {
-			debug('participant already added, skipping.');
-			(done || _.identity)(false);
-		}
-		roll(participant.init, result => {
-			participant.init = result;
-			const insertIdx = _.sortedIndex(list, participant, 'name');
-			list.splice(insertIdx, 0, participant);
-			if (isCombatRunning()) {
-				roundInfo().toAct.push(participant);
-				participantsChanged();
+	function addParticipant(list, participant) {
+
+		return new Promise((resolve, reject) => {
+			if (getParticipant(participant.id)) {
+				debug('participant already added, skipping.');
+				reject();
 			}
-			debug('Added participant: "', participant, '"');
-			(done || _.identity)(participant);
+			roll(participant.init, result => {
+				participant.init = result;
+				const insertIdx = _.sortedIndex(list, participant, 'name');
+				list.splice(insertIdx, 0, participant);
+				if (isCombatRunning()) {
+					roundInfo().toAct.push(participant);
+					participantsChanged();
+				}
+				debug('Added participant: "', participant, '"');
+				resolve(participant);
+			});
 		});
 	}
 
