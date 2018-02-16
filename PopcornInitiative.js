@@ -427,11 +427,13 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function addEnemy(enemy) {
-		return addParticipant(participants().enemies, enemy).then(() => {
+		const result = addParticipant(participants().enemies, enemy);
+		result.then(() => {
 			if (enemy.token) {
 				participants().enemyTokens[enemy.token] = true;
 			}
 		});
+		return result;
 	}
 
 	function addParticipant(list, participant) {
