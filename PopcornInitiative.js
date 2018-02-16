@@ -524,7 +524,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		roundInfo().curId = participant.id;
 		roundInfo().curTurn++;
 		debug('New turn: ' + roundInfo().curTurn);
-		arrayRemove(roundInfo().toAct, participant);
+		arrayRemove(roundInfo().toAct, participantHasId(participant.id));
 
 		syncTurnOrder();
 
@@ -609,8 +609,13 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		return !roundInfo().toAct.some(participantHasId(participant.id));
 	}
 
-	function arrayRemove(array, elem) {
-		const pos = array.indexOf(elem);
+	function arrayRemove(array, arg) {
+		let pos;
+		if (typeof arg === 'function') {
+			pos = array.findIndex(arg);
+		} else {
+			pos = array.indexOf(arg);
+		}
 		return pos >= 0 ? array.splice(pos, 1) : array;
 	}
 
