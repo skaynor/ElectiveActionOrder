@@ -67,10 +67,10 @@ var PopcornInitiative = PopcornInitiative || (function() {
 					if (result.errors.length > 0) {
 						const errors = result.errors.join('<br />');
 						const tokenName = (token && token.get) ? token.get('name') : token;
-						send(msg.playerid, 'Could not add token ' + tokenName + ', errors: <br />' + errors);
+						send(msg.playerid, 'Could not add token ' + tokenName + ', error(s): <br />' + errors);
 					} else if (result.warnings.length > 0) {
 						const warnings = result.warnings.join('<br />');
-						const content = 'Added ' + participant.name + ', initiative ' + participant.init + ' with warnings: <br />' + warnings;
+						const content = 'Added ' + participant.name + ', initiative ' + participant.init + ' with warning(s): <br />' + warnings;
 						send(msg.playerid, content);
 					} else {
 						send(msg.playerid, 'Added ' + participant.name + ' with initiative ' + participant.init + '.');
