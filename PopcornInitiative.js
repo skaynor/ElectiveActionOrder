@@ -790,7 +790,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	function isPlayersTurn(playerID) {
 		const curParticipant = getCurrentParticipant();
 		if (playerIsGM(playerID)) {
-			return isEnemy(curParticipant);
+			return DEBUG || isEnemy(curParticipant);
 		} else {
 			return curParticipant.playerIDs.includes(playerID);
 		}
