@@ -440,9 +440,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	function addToken(token, initiative) {
 		if (!token || token.get('_subtype') !== 'token') {
 			debug('Not a valid token: ', token);
-			return new Promise(((resolve) => {
-				resolve(buildResult(undefined, ['Not a valid token!']));
-			}));
+			return Promise.resolve(buildResult(undefined, ['Not a valid token!']));
 		}
 
 		let result = buildResult();
@@ -538,7 +536,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		return new Promise((resolve) => {
 			if (getParticipant(participant.id)) {
-				resolve(buildMsgResult('Participant already added'));
+				resolve(buildMsgResult(['Participant already added']));
+				return;
 			}
 			roll(participant.init, roll => {
 				participant.init = roll;
