@@ -1,7 +1,7 @@
 /* jshint -W132 */
 var PopcornInitiative = PopcornInitiative || (function() {
 	const DEBUG = true;
-	const DEBUG_LOG = false;
+	const DEBUG_LOG = true;
 
 	const COMMAND = '!pci';
 	const CHAT_NAME = 'Initiative';
@@ -11,6 +11,13 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	const CHECK_ON = '☑';
 
 	const ENEMY_GROUP = 'Enemies';
+	const ENEMY_GROUP_PARTICIPANT = {
+		id: ENEMY_GROUP,
+		name: ENEMY_GROUP,
+		playerIDs: [],
+		token: undefined,
+		init: 0
+	};
 
 	on('chat:message', messageHandler);
 
@@ -22,6 +29,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		// The only real solution is for the DM to only add tokens to initiative when they should be shown to the players, disabling the
 		// possibility for hidden tokens, which is how it's implemented.
 		groupEnemies: true
+		// TODO tactical dice
 	};
 
 	state.PopcornInitiative = state.PopcornInitiative || {};
@@ -56,7 +64,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			const selection = getCurrentSelection(msg);
 			const tokens = selection.filter(selected => selected._type === 'graphic');
 			if (tokens.length === 0) {
-				send(msg.playerid, 'No token selected!');
+				Messages.sendError(msg.playerid, 'No token selected!');
 				return;
 			}
 			const initiative = getOption(msg, 0);
@@ -65,15 +73,13 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				addToken(token, initiative).then(result => {
 					const participant = result.result;
 					if (result.errors.length > 0) {
-						const errors = result.errors.join('<br />');
 						const tokenName = (token && token.get) ? token.get('name') : token;
-						send(msg.playerid, 'Could not add token ' + tokenName + ', error(s): <br />' + errors);
+						Messages.sendError(msg.playerid, 'Could not add token ' + tokenName, result.errors);
 					} else if (result.warnings.length > 0) {
-						const warnings = result.warnings.join('<br />');
-						const content = 'Added ' + participant.name + ', initiative ' + participant.init + ' with warning(s): <br />' + warnings;
-						send(msg.playerid, content);
+						const content = 'Added ' + participant.name + ', initiative ' + participant.init;
+						Messages.sendWarning(msg.playerid, content, result.warnings);
 					} else {
-						send(msg.playerid, 'Added ' + participant.name + ' with initiative ' + participant.init + '.');
+						Messages.sendInfo(msg.playerid, 'Added ' + participant.name + ' with initiative ' + participant.init + '.');
 					}
 				});
 			});
@@ -101,7 +107,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 			addTurnOrder(msg).then(() => {
 				if (getAllParticipants().length === 0) {
-					send(msg.playerid, 'Trying to start combat with no participants!');
+					Messages.sendError(msg.playerid, 'Trying to start combat with no participants!');
 					return;
 				}
 				debug('Starting new combat...');
@@ -120,39 +126,38 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			const playerID = msg.playerid;
 			if (!isPlayersTurn(playerID)) {
 				debug('Player ', msg.who, ' tried to give turn over, but it\'s not his turn.');
-				send(msg.playerid, 'It\'s not your turn!');
+				Messages.sendError(msg.playerid, 'It\'s not your turn!');
 				return;
 			}
 			const option = getOption(msg, 0);
-			let participant = (config.groupEnemies && option === ENEMY_GROUP) ? ENEMY_GROUP : getParticipant(option);
+			let participant = (config.groupEnemies && option === ENEMY_GROUP) ? ENEMY_GROUP_PARTICIPANT : getParticipant(option);
 			if (!participant) {
-				send(msg.playerid, 'You tried to give turn to ', option, ' but a participant with that ID does not exist!');
+				Messages.sendError(msg.playerid, 'You tried to give turn to ', option, ' but a participant with that ID does not exist!');
 				return;
 			}
 			const result = giveTurn(participant);
 			if (result.errors.length > 0) {
-				const errors = result.errors.join('<br />');
-				send(playerID, 'Can not give turn to ' + participant.name + ' : <br />' + errors);
+				Messages.sendError(playerID, 'Can not give turn to ' + participant.name, result.errors);
 			}
 		},
 		reset: msg => {
 			const playerID = msg.playerid;
 			if (!playerIsGM(playerID)) {
-				send(playerID, 'Only the GM can reset the popcorn initiative.');
+				Messages.sendError(playerID, 'Only the GM can reset the popcorn initiative.');
 			}
 			resetParticipants();
 			resetRoundInfo();
-			send(playerID, 'Popcorn initiative has been reset.');
+			Messages.sendInfo(playerID, 'Popcorn initiative has been reset.');
 		},
 		status: msg => {
 			const playerID = msg.playerid;
 			if (isCombatRunning()) {
-				sendStatus(playerID);
+				Messages.sendStatus(playerID);
 			} else {
-				send(playerID, 'No combat running.');
+				Messages.sendInfo(playerID, 'No combat running.');
 
 				if (playerIsGM(playerID)) {
-					sendParticipantsStatus(playerID);
+					Messages.sendParticipantsStatus(playerID);
 				}
 			}
 		},
@@ -160,13 +165,13 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			const playerID = msg.playerid;
 
 			if (!isCombatRunning()) {
-				send(playerID, 'No combat running, there is nothing you can do right now.');
+				Messages.sendError(playerID, 'No combat running, there is nothing you can do right now.');
 			} else if (isPlayersTurn(playerID)) {
-				resendCurrentChoice();
+				Messages.resendCurrentChoice();
 			} else {
-					send(playerID, 'It\'s not your turn so there is no menu for you, but here\'s the current ' +
-						'status (next time use "' + COMMAND + ' status"):');
-					sendStatus(playerID);
+				Messages.sendWarning(playerID, 'It\'s not your turn so there is no menu for you, but here\'s the current ' +
+					'status (next time use "' + COMMAND + ' status"):');
+				Messages.sendStatus(playerID);
 			}
 		}
 	};
@@ -207,19 +212,18 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		const options = msg.content.split(' ');
 		if (options.length === 1) {
-			sendHelp(msg.playerid);
+			Messages.sendHelp(msg.playerid);
 			return;
 		}
 
 		const handler = handlers[options[1]];
 		if (!handler) {
-			sendHelp(msg.playerid, options);
+			Messages.sendHelp(msg.playerid);
 			return;
 		}
 
 		handler(msg);
 	}
-
 
 	function debug(...args) {
 		if (!DEBUG || !DEBUG_LOG) {
@@ -231,20 +235,14 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			message = 'Debug message missing!';
 		} else {
 			message = args.map(arg => (typeof arg === 'object') ? JSON.stringify(arg, null, 4) : arg)
-				.reduce((message, arg) => message + arg)
-				.replace(/\n/g, '<br/>');
+				.reduce((message, arg) => message + arg);
 		}
 
-		send('-L5DOgB6lPNKGooiSHet', '<pre>' + message + '</pre>');
+		const htmlBuilder = new HtmlBuilder('pre', message);
+
+		Messages.sendRaw('-L5DOgB6lPNKGooiSHet', htmlBuilder.toString());
 	}
 
-	function send(playerID, content) {
-		sendChat('Initiative', '/w ' + getPlayerName(playerID) + ' ' + content, null, {noarchive: true});
-	}
-
-	function sendHelp(playerID, options) {
-		send(playerID, 'Unrecognized command');
-	}
 
 	function getPlayerName(playerID) {
 		return playerID && playerID !== 'gm' ? '"' + getObj('player', playerID).get('displayname') + '"' : 'gm';
@@ -255,20 +253,20 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		const playerMessage = 'Starting combat with ' + players.length + ' player' + ((players.length !== 1) ? 's' : '') + ': ' + players.join(', ');
 		const hfgl = '! Have fun ;)';
 		if (config.groupEnemies) {
-			sendInfo(playerMessage + hfgl);
+			Messages.postInfo(playerMessage + hfgl);
 		} else {
 			const enemies = getEnemies().map(enemy => enemy.name + ' (Init: ' + enemy.init + ')');
 			const enemyMessage = enemies.length + ' enemy' + ((enemies.length !== 1) ? 's' : '') + ': ' + enemies.join(', ');
-			sendInfo(playerMessage + ' and ' + enemyMessage + hfgl);
+			Messages.postInfo(playerMessage + ' and ' + enemyMessage + hfgl);
 		}
 		showTurnOrder();
 		resetRoundInfo();
 		startNewRound();
 		const highestInit = getHighestInit();
 		if (config.groupEnemies && isEnemy(highestInit)) {
-			sendInfo('An enemy won initiative with a ' + highestInit.init + ' and will start the combat!');
+			Messages.postInfo('An enemy won initiative with a ' + highestInit.init + ' and will start the combat!');
 		} else {
-			sendInfo(highestInit.name + ' won initiative with a ' + highestInit.init + '!');
+			Messages.postInfo(highestInit.name + ' won initiative with a ' + highestInit.init + '!');
 		}
 		giveTurn(highestInit);
 	}
@@ -293,9 +291,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 		currentEntry.pr = '';
 
+		const filterCurrent = participants => participants.filter(_.negate(participantHasID(currentParticipant.id)));
+
 		let restTurnOrderEntries;
 		if (config.groupEnemies) {
-			restTurnOrderEntries = buildTurnOrderEntries(getPlayers());
+			restTurnOrderEntries = buildTurnOrderEntries(filterCurrent(getPlayers()));
 			debug('Rest players: ', restTurnOrderEntries);
 			if (isPlayer(currentParticipant)) {
 				debug('Add enemies');
@@ -303,7 +303,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				debug('Rest players: ', restTurnOrderEntries);
 			}
 		} else {
-			const allWithoutCurrent = getAllParticipants.filter(_.negate(participantHasID(currentParticipant.id)));
+			const allWithoutCurrent = filterCurrent(getAllParticipants());
 			restTurnOrderEntries = buildTurnOrderEntries(allWithoutCurrent);
 		}
 		return [currentEntry].concat(restTurnOrderEntries);
@@ -403,23 +403,18 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		const tokenPromises = tokens.map(token => {
 			return addTokenID(token.id, token.pr).then(result => {
-				const tokenString = token && token.JSON.stringify(token);
+				debug('Turnorder addTokenID result ', result);
+				const tokenString = token && JSON.stringify(token);
 				if (result.errors.length > 0) {
-					const errors = result.errors.map(messageToString).join('<br />');
-					send(msg.playerid, 'Error(s) while adding token \'' + tokenString + '\': <br />' + errors);
+					Messages.sendError(msg.playerid, 'Error(s) while adding token \'' + tokenString + '\'', result.errors);
 				}
 				if (result.warnings.length > 0) {
-					const warnings = result.warnings.map(messageToString).join('<br />');
-					send(msg.playerid, 'Warning(s) while adding token \'' + tokenString + '\': <br />' + warnings);
+					Messages.sendWarning(msg.playerid, 'Warning(s) while adding token \'' + tokenString + '\'', result.warnings);
 				}
 			});
 		});
 
 		return Promise.all(tokenPromises);
-	}
-
-	function messageToString(message) {
-		return message.msg;
 	}
 
 	function addName(name, initiative) {
@@ -444,6 +439,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		let result = buildResult();
+		debug('Adding token ', token);
 
 		if (initiative === undefined) {
 			const initResult = getInitiative(token);
@@ -470,6 +466,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		});
 
 		const addResults = addResult => {
+			debug('Adding result from token add: ', addResult);
 			return addMessagesFromResult(addResult, result);
 		};
 		return addPromise.then(addResults, addResults);
@@ -609,9 +606,9 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		debug('Giving turn to "', participant, '"...');
 
-		if (participant === ENEMY_GROUP) {
+		if (participant.id === ENEMY_GROUP) {
 			roundInfo().curID = ENEMY_GROUP;
-			sendGMChooseEnemy();
+			Messages.sendGMChooseEnemy();
 			return buildResult();
 		}
 
@@ -629,21 +626,15 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		const canGiveTurnTo = getPossibleSuccessors(participant);
 		debug('Can give turn to: ', canGiveTurnTo);
-		sendTurnInfo();
-		sendChoice(participant, canGiveTurnTo);
+		Messages.postTurnInfo();
+		Messages.sendChoice(participant, canGiveTurnTo);
 
 		return buildResult();
 	}
 
-	function sendGMChooseEnemy() {
-		const canGiveTurnTo = getPossibleSuccessors(ENEMY_GROUP);
-		const buttons = buildGiveTurnButtons(canGiveTurnTo);
-		const buttonsString = buttons.join(' ');
-		send('gm', 'Choose an enemy to get the next turn: ' + buttonsString);
-	}
 
 	function getPossibleSuccessors(participant) {
-		if (participant === ENEMY_GROUP) {
+		if (participant.id === ENEMY_GROUP) {
 			if (roundInfo().toAct.length === 0) {
 				return getEnemies();
 			} else {
@@ -654,11 +645,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 		if (config.groupEnemies && isPlayer(participant)) {
 			if (areAllTurnsDone()) {
-				return getPlayers().concat([ENEMY_GROUP]);
+				return getPlayers().concat([ENEMY_GROUP_PARTICIPANT]);
 			} else {
 				const amountLeft = roundInfo().toAct.length;
 				const playersToAct = roundInfo().toAct.filter(isPlayer);
-				return amountLeft - playersToAct.length === 0 ? playersToAct : playersToAct.concat([ENEMY_GROUP]);
+				return amountLeft - playersToAct.length === 0 ? playersToAct : playersToAct.concat([ENEMY_GROUP_PARTICIPANT]);
 			}
 		} else {
 			return areAllTurnsDone() ? getAllParticipants() : roundInfo().toAct;
@@ -673,86 +664,12 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		return participant.playerIDs.length === 0;
 	}
 
-
-	function sendChoice(participant, canGiveTurnTo) {
-		const buttons = buildGiveTurnButtons(canGiveTurnTo);
-		const buttonsString = buttons.join(' ');
-
-		sendParticipant(participant, 'Give turn to <br />' + buttonsString);
-	}
-
-	function resendCurrentChoice() {
-		const curParticipant = getCurrentParticipant();
-		if (curParticipant.id === ENEMY_GROUP) {
-			sendGMChooseEnemy();
-		} else {
-			sendChoice(curParticipant, getPossibleSuccessors(curParticipant));
-		}
-	}
-
-	function sendParticipant(participant, message) {
-		let recipients = participant.playerIDs.slice();
-		if (recipients.length === 0 || (DEBUG && recipients.indexOf(participants().GMs) === -1)) {
-			recipients = recipients.concat(participants().GMs);
-		}
-
-		recipients.forEach(recipient => {
-			send(recipient, message);
-		});
-	}
-
-	function buildGiveTurnButtons(canGiveTurnTo) {
-		return canGiveTurnTo.map(participant => {
-			let name;
-			let id;
-			if (participant === ENEMY_GROUP) {
-				name = ENEMY_GROUP;
-				id = ENEMY_GROUP;
-			} else {
-				name = participant.name;
-				id = participant.id;
-			}
-			return '[' + name + '](' + COMMAND + ' giveturnAPI ' + id + ')';
-		});
-	}
-
-	function getTurnInfo() {
-		const curParticipant = getCurrentParticipant();
-		let name = (config.groupEnemies && isEnemy(curParticipant)) ? 'the ' + ENEMY_GROUP : curParticipant.name;
-		name = name.endsWith('s') ? name : (name + 's');
-		return 'Round ' + (roundInfo().curRound + 1) + ', Turn ' + (roundInfo().curTurn + 1) + '<br/> It\'s ' + name + ' turn!';
-	}
-
-	function sendTurnInfo(playerID) {
-		const turnInfo = getTurnInfo();
-		if (playerID) {
-			send(playerID, turnInfo);
-		} else {
-			sendInfo(turnInfo);
-		}
-	}
-
-	function sendStatus(playerID) {
-		sendParticipantsStatus(playerID);
-		sendTurnInfo(playerID);
-		sendActedStatus(playerID);
-	}
-
 	function getPlayers() {
 		return participants().players.slice();
 	}
+
 	function getEnemies() {
 		return participants().enemies.slice();
-	}
-
-	function sendParticipantsStatus(playerID) {
-		let visibleParticipants = getPlayers();
-		if (!config.groupEnemies || playerIsGM(playerID)) {
-			visibleParticipants.push(...getEnemies());
-		} else {
-			visibleParticipants.push({name: 'a bunch of enemies'});
-		}
-		send(playerID, 'The following participants are in initiative: ' + '"' + visibleParticipants.map(p => p.name).join('", "') + '"');
 	}
 
 	function replaceWithGroupedEnemies(acted) {
@@ -763,22 +680,6 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		return acted;
 	}
 
-	function sendActedStatus(playerID) {
-		let acted = getAllParticipants().filter(hasActed);
-		let toAct = roundInfo().toAct;
-		if (config.groupEnemies && !playerIsGM(playerID)) {
-			acted = replaceWithGroupedEnemies(acted);
-			toAct = replaceWithGroupedEnemies(toAct);
-		}
-
-
-		send(playerID, 'These participants already acted this turn: ' + acted.map(p => p.name).join(', '));
-		send(playerID, 'These participants still have to act during this turn: ' + toAct.map(p => p.name).join(', '));
-	}
-
-	function sendInfo(message) {
-		sendChat(CHAT_NAME, message, null, {noarchive: true});
-	}
 
 	function hasActed(participant) {
 		return !roundInfo().toAct.some(participantHasID(participant.id));
@@ -823,7 +724,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		const currentParticipant = getCurrentParticipant();
 		const participant = getAllParticipants().find(participant => participant.token === id);
 		if (!config.groupEnemies || isEnemy(currentParticipant)) {
-			sendParticipant(currentParticipant, participant.name + ' died, these are the new choices:');
+			Messages.sendParticipant(currentParticipant, participant.name + ' died, these are the new choices:');
 		}
 
 		remove(participant);
@@ -868,7 +769,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				swapTurn(getHighestInit());
 			}
 		} else if (isCombatRunning()) {
-			resendCurrentChoice();
+			Messages.resendCurrentChoice();
 		}
 
 		syncTurnOrder();
@@ -881,20 +782,14 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	function getCurrentParticipant() {
 		if (roundInfo().curID === ENEMY_GROUP) {
-			return {
-				id: ENEMY_GROUP,
-				name: ENEMY_GROUP,
-				playerIDs: [],
-				token: undefined,
-				init: 0
-			};
+			return ENEMY_GROUP_PARTICIPANT;
 		} else {
 			return getParticipant(roundInfo().curID);
 		}
 	}
 
 	function stopCombat() {
-		sendInfo('Ending combat. Hopefully no player died!');
+		Messages.postInfo('Ending combat. Hopefully no player died!');
 		resetParticipants();
 		resetRoundInfo();
 		resetTurnOrder();
@@ -907,6 +802,234 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	function hideTurnOrder() {
 		Campaign().set('initiativepage', false);
+	}
+
+	class Messages {
+		static sendRaw(playerID, msg) {
+			Messages.sendChat('/w ' + getPlayerName(playerID) + ' ' + msg);
+		}
+
+		static sendChat(msg) {
+			const msgWithoutLinebreaks = msg.replace(/\n/g, '<br/>');
+			sendChat(CHAT_NAME, msgWithoutLinebreaks, null, {noarchive: true});
+		}
+
+		static sendError(playerID, message, errors) {
+			Messages.sendRaw(playerID, Messages.createResultMessage('error', message, errors));
+		}
+
+		static sendWarning(playerID, message, warnings) {
+			Messages.sendRaw(playerID, Messages.createResultMessage('warning', message, warnings));
+		}
+
+		static createResultMessage(type, message, extraMessages) {
+			let msgBuilder = new HtmlBuilder('div.message ' + type, message);
+			if (extraMessages && extraMessages.length !== 0) {
+				msgBuilder.append('div', type + '(s):', {
+					style: {
+						'margin-top': '9px'
+					}
+				});
+				let ul = msgBuilder.append('ul.extras');
+				extraMessages.forEach(extra => ul.append('li', extra));
+			}
+			msgBuilder.setCss({
+				'extras': {
+					'margin-bottom': '0',
+					'margin-top': '9px'
+				},
+				'message': {
+					'border-style': 'solid',
+					'border-width': '1px',
+					'border-radius': '6px',
+					'padding': '4px'
+				},
+				'info': {
+					'background-color': '#fff',
+					'border-color': '#000',
+				},
+				'error': {
+					'background-color': '#ffd6d6',
+					'border-color': '#f00',
+				},
+				'warning': {
+					'background-color': '#ffe199',
+					'border-color': '#c87f00',
+				}
+			});
+			return msgBuilder.toString();
+		}
+
+		static sendHelp(playerID) {
+			Messages.sendInfo(playerID, 'Unrecognized command');
+
+			// TODO better help
+		}
+
+		static sendActedStatus(playerID) {
+			let acted = getAllParticipants().filter(hasActed);
+			let toAct = roundInfo().toAct;
+			if (config.groupEnemies && !playerIsGM(playerID)) {
+				acted = replaceWithGroupedEnemies(acted);
+				toAct = replaceWithGroupedEnemies(toAct);
+			}
+
+			if (acted.length === 0) {
+				Messages.sendInfo(playerID, 'Noone acted this turn yet.');
+			} else {
+				Messages.sendInfo(playerID, 'These participants already acted this turn: ' + acted.map(p => p.name).join(', '));
+			}
+
+			if (toAct.length === 0) {
+				Messages.sendInfo(playerID, 'Everyone acted already.');
+			} else {
+				Messages.sendInfo(playerID, 'These participants still have to act during this turn: ' + toAct.map(p => p.name).join(', '));
+			}
+		}
+
+		static postInfo(message) {
+			Messages.postRaw(Messages.createResultMessage('info', message));
+		}
+
+		static postRaw(message) {
+			Messages.sendChat(message);
+		}
+
+		static sendInfo(playerID, message) {
+			Messages.sendRaw(playerID, Messages.createResultMessage('info', message));
+		}
+
+		static sendChoice(participant, canGiveTurnTo) {
+			const buttons = Messages.buildGiveTurnButtons(canGiveTurnTo);
+			const buttonsString = buttons.join(' ');
+
+			const htmlBuilder = new HtmlBuilder();
+			const yourTurn = htmlBuilder.append('div', 'It\'s your turn, ', {
+				style: {
+					'font-weight': 'bold',
+					'font-size': '1.3em'
+				}
+			});
+			yourTurn.append('span', participant.name, {
+				style: {
+					'font-weight': 'bold',
+					'color': '#117412'
+				}
+			});
+			yourTurn.append('span', '!');
+			htmlBuilder.append('hr', null, {
+				style: {
+					'margin': '9px 0'
+				}
+			});
+			htmlBuilder.append('div', 'Give turn to:', {
+				style: {
+					'margin': '9px 0'
+				}
+			});
+			htmlBuilder.append('div', buttonsString);
+
+			Messages.sendParticipant(participant, htmlBuilder.toString());
+		}
+
+		static resendCurrentChoice() {
+			const curParticipant = getCurrentParticipant();
+			if (curParticipant.id === ENEMY_GROUP) {
+				Messages.sendGMChooseEnemy();
+			} else {
+				Messages.sendChoice(curParticipant, getPossibleSuccessors(curParticipant));
+			}
+		}
+
+		static sendParticipant(participant, message) {
+			let recipients = participant.playerIDs.slice();
+			if (recipients.length === 0 || (DEBUG && recipients.indexOf(participants().GMs) === -1)) {
+				recipients = recipients.concat(participants().GMs);
+			}
+
+			recipients.forEach(recipient => {
+				Messages.sendInfo(recipient, message);
+			});
+		}
+
+		static buildGiveTurnButtons(canGiveTurnTo) {
+			return canGiveTurnTo.map(participant => {
+				const bgColor = isEnemy(participant) ? '#a12313' : '#117412';
+				return new HtmlBuilder('a', participant.name, {
+					href: COMMAND + ' giveturnAPI ' + participant.id,
+					style: {
+						'background-color': bgColor,
+						// 'padding': '5px',
+						// 'color': '#fff',
+						// 'font-weight': 'bold',
+						'border-radius': '6px',
+					}
+				}).toString();
+			});
+		}
+
+		static sendGMChooseEnemy() {
+			const canGiveTurnTo = getPossibleSuccessors(ENEMY_GROUP_PARTICIPANT);
+			const buttons = Messages.buildGiveTurnButtons(canGiveTurnTo);
+			const buttonsString = buttons.join(' ');
+			Messages.sendInfo('gm', 'Choose an enemy to get the next turn: ' + buttonsString);
+		}
+
+		static sendStatus(playerID) {
+			Messages.sendParticipantsStatus(playerID);
+			Messages.sendTurnInfo(playerID);
+			Messages.sendActedStatus(playerID);
+		}
+
+		static sendParticipantsStatus(playerID) {
+			let visibleParticipants = getPlayers();
+			if (!config.groupEnemies || playerIsGM(playerID)) {
+				visibleParticipants.push(...getEnemies());
+			} else {
+				visibleParticipants.push({name: 'a bunch of enemies'});
+			}
+			Messages.sendInfo(playerID, 'The following participants are in initiative: ' + '"' + visibleParticipants.map(p => p.name).join('", "') + '"');
+		}
+
+		static sendTurnInfo(playerID) {
+			Messages.sendInfo(playerID, Messages.getTurnInfo());
+		}
+
+		static postTurnInfo() {
+			Messages.postInfo(Messages.getTurnInfo());
+		}
+
+
+		static getTurnInfo() {
+			const curParticipant = getCurrentParticipant();
+			let name = (config.groupEnemies && isEnemy(curParticipant)) ? 'The enemies' : curParticipant.name;
+
+			const htmlBuilder = new HtmlBuilder();
+			htmlBuilder.append('div', 'Round ' + (roundInfo().curRound + 1) + ', Turn ' + (roundInfo().curTurn + 1), {
+				style: {
+					'font-variant': 'small-caps',
+					'font-weight': 'bold',
+					'font-size': '1.3em',
+				}
+			});
+			htmlBuilder.append('hr', null, {
+				style: {
+					'margin': '9px 0'
+				}
+			});
+			const nowActing = htmlBuilder.append('div', 'Now acting: ');
+			const color = isEnemy(curParticipant) ? '#a12313' : '#117412';
+			nowActing.append('span', name, {
+				style: {
+					'font-size': '1.1em',
+					'font-weight': 'bold',
+					'color': color
+				}
+			});
+			return htmlBuilder.toString();
+		}
+
+
 	}
 
 	on('ready', () => {
