@@ -1,7 +1,7 @@
 /* jshint -W132 */
 var PopcornInitiative = PopcornInitiative || (function() {
-	const DEBUG = true;
-	const DEBUG_LOG = true;
+	const DEBUG = false;
+	const DEBUG_LOG = false;
 
 	const COMMAND = '!pci';
 	const CHAT_NAME = 'Initiative';
@@ -19,6 +19,160 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		init: 0
 	};
 
+	class TacticalDice {
+
+		static reset() {
+			if (!config.tacticalDice.persist) {
+				this._resetDice();
+			}
+			this._consecutiveTurns = 0;
+			this._lastTeam = '';
+		}
+
+		static _resetDice() {
+			this._setDice(this.ENEMIES, 0);
+			this._setDice(this.PLAYERS, 0);
+		}
+
+		static fullReset() {
+			this.reset();
+			this._resetDice();
+		}
+
+		static getDice(team) {
+			return this._state[team] + config.tacticalDice.die;
+		}
+
+		static _getDice(team) {
+			return this._state[team];
+		}
+
+		static _setDice(team, count) {
+			this._state[team] = count;
+		}
+
+		static _addDice(team, count) {
+			this._state[team] += count;
+		}
+
+		static get _consecutiveTurns() {
+			return this._state.consecutiveTurns;
+		}
+
+		static set _consecutiveTurns(turns) {
+			this._state.consecutiveTurns = turns;
+		}
+
+		static get _lastTeam() {
+			return this._state.lastTeam;
+		}
+
+		static set _lastTeam(team) {
+			this._state.lastTeam = team;
+		}
+
+		static get _state() {
+			return state.PopcornInitiative.tacticalDiceVar;
+		}
+
+		static addTurn(team) {
+			if (team === this._lastTeam) {
+				if (this.wouldGiveTacDice(team)) {
+					this._addDice(this.getOtherTeam(team), this._wouldGiveTacDiceAmount(team));
+				}
+				this._consecutiveTurns++;
+			} else {
+				this._consecutiveTurns = 1;
+				this._lastTeam = team;
+			}
+		}
+
+		static newRound() {
+			this._consecutiveTurns = 0;
+		}
+
+		static wouldGiveTacDice(team) {
+			return this._hasTeamStayedTheSame(team) &&
+				this._willMaxTurnsBeExceeded(team) &&
+				!areAllTurnsDone() &&
+				this._areMembersOfTheOtherTeamLeftInRound(team);
+		}
+
+		static _hasTeamStayedTheSame(team) {
+			return team === this._lastTeam;
+		}
+
+		static _willMaxTurnsBeExceeded(team) {
+			return this._consecutiveTurns >= this._getMaxConsecutiveTurns(team);
+		}
+
+		static _getMaxConsecutiveTurns(team) {
+			const configuredValue = config.tacticalDice.maxConsecutiveTurns;
+			const teamSize = this._getTeamParticipants(team).length;
+			const otherTeamSize = this._getTeamParticipants(this.getOtherTeam(team)).length;
+			let maxConsecutiveTurns;
+			if (otherTeamSize >= teamSize) {
+				maxConsecutiveTurns = configuredValue;
+			} else {
+				maxConsecutiveTurns = Math.round(teamSize / otherTeamSize * configuredValue);
+			}
+			debug('maxConsecutiveTurns for team ', team, ': ', maxConsecutiveTurns);
+			return maxConsecutiveTurns;
+		}
+
+		static getOtherTeam(team) {
+			return TacticalDice.ENEMIES === team ? TacticalDice.PLAYERS : TacticalDice.ENEMIES;
+		}
+
+		static _getTeamParticipants(team) {
+			return team === TacticalDice.ENEMIES ? getEnemies() : getPlayers();
+		}
+
+		static _areMembersOfTheOtherTeamLeftInRound(team) {
+			const possibleSuccessors = getPossibleSuccessors(getCurrentParticipant());
+			debug('_areMembersOfTheOtherTeamLeftInRound possibleSuccessors', possibleSuccessors);
+			const isOfOtherTeam = (team === TacticalDice.ENEMIES) ? isPlayer : isEnemy;
+			const membersOfOtherTeam = possibleSuccessors.filter(isOfOtherTeam);
+			debug('_areMembersOfTheOtherTeamLeftInRound membersOfOtherTeam', membersOfOtherTeam);
+			return membersOfOtherTeam.length > 0;
+		}
+
+		static _wouldGiveTacDiceAmount(team) {
+			if (!this.wouldGiveTacDice(team)) {
+				return 0;
+			}
+
+			if (config.tacticalDice.amountIncreasingPerTurn) {
+				return this._consecutiveTurns - this._getMaxConsecutiveTurns(team) + 1;
+			} else {
+				return 1;
+			}
+		}
+
+		static wouldGiveTacDiceAmount(team) {
+			return this._wouldGiveTacDiceAmount(team) + config.tacticalDice.die;
+		}
+
+		static useDie(team) {
+			return new Promise(resolve => {
+				const dice = TacticalDice._getDice(team);
+				if (dice === 0) {
+					resolve(buildMsgResult(['The ' + team + ' do not currently have any tactical dice.']));
+					return;
+				}
+				TacticalDice._setDice(team, dice - 1);
+				roll(1 + config.tacticalDice.die).then(roll => {
+					resolve(buildResult(roll));
+				}).catch(reason => {
+					resolve(buildMsgResult(['Error while rolling: ' + reason]));
+				});
+			});
+		}
+	}
+
+	TacticalDice.ENEMIES = 'enemies';
+	TacticalDice.PLAYERS = 'players';
+
 	on('chat:message', messageHandler);
 
 	on("change:graphic:status_dead", tokenDeadHandler);
@@ -28,8 +182,15 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		// However, this can not be implemented in popcorn initiative: what happens when it's a player's turn and there are only hidden enemies left?
 		// The only real solution is for the DM to only add tokens to initiative when they should be shown to the players, disabling the
 		// possibility for hidden tokens, which is how it's implemented.
-		groupEnemies: true
-		// TODO tactical dice
+		groupEnemies: true,
+		tacticalDice: {
+			enabled: true,
+			persist: true,
+			maxConsecutiveTurns: 2,
+			teamSizeAdjustment: true,
+			die: 'd6',
+			amountIncreasingPerTurn: true
+		},
 	};
 
 	state.PopcornInitiative = state.PopcornInitiative || {};
@@ -49,6 +210,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	function roundInfo() {
 		return state.PopcornInitiative.roundInfoVar;
+	}
+
+	if (!state.PopcornInitiative.tacticalDiceVar) {
+		state.PopcornInitiative.tacticalDiceVar = {};
+		TacticalDice.fullReset();
 	}
 
 
@@ -85,7 +251,9 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			});
 		},
 		remove: msg => {
-			if (!playerIsGM(msg.playerid)) {
+			const playerID = msg.playerid;
+			if (!playerIsGM(playerID)) {
+				Messages.sendError(playerID, 'Only the GM can remove combat participants.');
 				return;
 			}
 
@@ -93,15 +261,24 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 			if (id) {
 				removeByID(id);
+				// TODO errors
 			} else {
 				const selection = getCurrentSelection(msg);
 				const selectionIDs = selection.map(graphic => graphic._id);
 				selectionIDs.forEach(removeByTokenID);
+				// TODO errors
 			}
 
 		},
 		start: msg => {
-			if (!playerIsGM(msg.playerid)) {
+			const playerID = msg.playerid;
+			if (!playerIsGM(playerID)) {
+				Messages.sendError(playerID, 'Only the GM can start fights.');
+				return;
+			}
+
+			if (isCombatRunning()) {
+				Messages.sendError(playerID, 'A combat is already going on.');
 				return;
 			}
 
@@ -117,13 +294,26 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			});
 		},
 		stop: msg => {
-			if (!playerIsGM(msg.playerid)) {
+			const playerID = msg.playerid;
+			if (!playerIsGM(playerID)) {
+				Messages.sendError(playerID, 'Only the GM can stop fights.');
 				return;
 			}
+
+			if (!isCombatRunning()) {
+				Messages.sendError(playerID, 'There is no fight going on.');
+				return;
+			}
+
 			stopCombat();
 		},
 		giveturnAPI: msg => {
 			const playerID = msg.playerid;
+			if (!isCombatRunning()) {
+				debug('Player ', msg.who, ' tried to give turn over, but no combat is running.');
+				Messages.sendError(playerID, 'Can\'t give turn, no combat running!');
+				return;
+			}
 			if (!isPlayersTurn(playerID)) {
 				debug('Player ', msg.who, ' tried to give turn over, but it\'s not his turn.');
 				Messages.sendError(msg.playerid, 'It\'s not your turn!');
@@ -138,23 +328,33 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			const result = giveTurn(participant);
 			if (result.errors.length > 0) {
 				Messages.sendError(playerID, 'Can not give turn to ' + participant.name, result.errors);
+			} else {
+				Messages.sendInfo(playerID, 'You successfully gave the turn to "' + participant.name + '".');
 			}
 		},
 		reset: msg => {
 			const playerID = msg.playerid;
 			if (!playerIsGM(playerID)) {
 				Messages.sendError(playerID, 'Only the GM can reset the popcorn initiative.');
+				return;
 			}
 			resetParticipants();
 			resetRoundInfo();
+			TacticalDice.fullReset();
 			Messages.sendInfo(playerID, 'Popcorn initiative has been reset.');
 		},
 		status: msg => {
+			debug('Participants:', state.PopcornInitiative.participantsVar);
+			debug('RoundInfo:', state.PopcornInitiative.roundInfoVar);
+			debug('TacDice:', state.PopcornInitiative.tacticalDiceVar);
+
 			const playerID = msg.playerid;
 			if (isCombatRunning()) {
 				Messages.sendStatus(playerID);
 			} else {
 				Messages.sendInfo(playerID, 'No combat running.');
+
+				Messages.sendTacticalDiceStatus(playerID);
 
 				if (playerIsGM(playerID)) {
 					Messages.sendParticipantsStatus(playerID);
@@ -172,6 +372,35 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				Messages.sendWarning(playerID, 'It\'s not your turn so there is no menu for you, but here\'s the current ' +
 					'status (next time use "' + COMMAND + ' status"):');
 				Messages.sendStatus(playerID);
+			}
+		},
+		tac: msg => {
+			const playerID = msg.playerid;
+			if (!config.tacticalDice.enabled) {
+				Messages.sendError(playerID, 'Tactical dice are not enabled.');
+				return;
+			}
+
+			const option1 = getOption(msg, 0);
+			switch (option1) {
+				case undefined:
+					Messages.sendTacticalDiceStatus(playerID);
+					break;
+				case 'use':
+					const team = playerIsGM(playerID) ? TacticalDice.ENEMIES : TacticalDice.PLAYERS;
+					TacticalDice.useDie(team).then(result => {
+						if (result.errors.length > 0) {
+							Messages.sendError(playerID, 'Could not use tactical die.', result.errors);
+							return;
+						}
+						const roll = result.result;
+						const remaining = TacticalDice.getDice(team);
+						Messages.postInfo('"' + msg.who + '" used a tactical die for the ' + team +
+							' (' + remaining + ' remaining).\n\nResult: ' + roll);
+					});
+					break;
+				default:
+					Messages.sendError(playerID, 'Unrecognized option "' + option1 + '"');
 			}
 		}
 	};
@@ -261,6 +490,9 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 		showTurnOrder();
 		resetRoundInfo();
+		if (config.tacticalDice.enabled) {
+			TacticalDice.reset();
+		}
 		startNewRound();
 		const highestInit = getHighestInit();
 		if (config.groupEnemies && isEnemy(highestInit)) {
@@ -268,7 +500,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		} else {
 			Messages.postInfo(highestInit.name + ' won initiative with a ' + highestInit.init + '!');
 		}
-		giveTurn(highestInit);
+		setCurrentParticipant(highestInit);
 	}
 
 	function getTurnOrder() {
@@ -385,10 +617,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	function resetRoundInfo() {
 		roundInfo().curRound = -1;
-		roundInfo().curTurn = -1;
+		roundInfo().curTurn = 0;
 		roundInfo().curID = undefined;
 		roundInfo().toAct = [];
 	}
+
 
 	function findGMs() {
 		return findObjs({_type: 'player'})
@@ -536,7 +769,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				resolve(buildMsgResult(['Participant already added']));
 				return;
 			}
-			roll(participant.init, roll => {
+			roll(participant.init).then(roll => {
 				participant.init = roll;
 				const insertIndex = _.sortedIndex(list, participant, 'name');
 				list.splice(insertIndex, 0, participant);
@@ -548,14 +781,18 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				const result = buildResult(participant);
 				debug('addParticipant result: ', result);
 				resolve(result);
+			}).catch(reason => {
+				resolve(buildMsgResult(['Error while rolling: ' + reason]));
 			});
 		});
 	}
 
-	function roll(query, callback) {
-		sendChat(CHAT_NAME, '/r ' + query, msg => {
-			const rollResult = JSON.parse(msg[0].content);
-			callback(rollResult.total);
+	function roll(query) {
+		return new Promise(resolve => {
+			sendChat(CHAT_NAME, '/r ' + query, msg => {
+				const rollResult = JSON.parse(msg[0].content);
+				resolve(rollResult.total);
+			});
 		});
 	}
 
@@ -595,11 +832,26 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		roundInfo().curRound++;
 		roundInfo().curID = playerID;
 		debug('New round: ' + roundInfo().curRound);
-		roundInfo().curTurn = -1;
+		roundInfo().curTurn = 0;
 		roundInfo().toAct = getAllParticipants();
+
+		if (config.tacticalDice.enabled) {
+			TacticalDice.newRound();
+		}
 	}
 
 	function giveTurn(participant) {
+		const result = setCurrentParticipant(participant);
+
+		if (result.errors.length === 0 && result.warnings.length === 0) {
+			roundInfo().curTurn++;
+			debug('New turn: ' + roundInfo().curTurn);
+		}
+
+		return result;
+	}
+
+	function setCurrentParticipant(participant) {
 		if (areAllTurnsDone()) {
 			startNewRound();
 		}
@@ -608,8 +860,13 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		if (participant.id === ENEMY_GROUP) {
 			roundInfo().curID = ENEMY_GROUP;
-			Messages.sendGMChooseEnemy();
-			return buildResult();
+			const enemies = getPossibleSuccessors(participant).filter(isEnemy);
+			if (enemies.length === 1) {
+				return setCurrentParticipant(enemies[0]);
+			} else {
+				Messages.sendGMChooseEnemy();
+				return buildMsgResult(undefined, ['No participant set, the GM will be choosing the participant.']);
+			}
 		}
 
 		if (hasActed(participant)) {
@@ -618,16 +875,18 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		roundInfo().curID = participant.id;
-		roundInfo().curTurn++;
-		debug('New turn: ' + roundInfo().curTurn);
 		arrayRemove(roundInfo().toAct, participantHasID(participant.id));
+
+		if (config.tacticalDice.enabled) {
+			TacticalDice.addTurn(isEnemy(participant) ? TacticalDice.ENEMIES : TacticalDice.PLAYERS);
+		}
 
 		syncTurnOrder();
 
-		const canGiveTurnTo = getPossibleSuccessors(participant);
-		debug('Can give turn to: ', canGiveTurnTo);
+		const possibleSuccessors = getPossibleSuccessors(participant);
+		debug('Can give turn to: ', possibleSuccessors);
 		Messages.postTurnInfo();
-		Messages.sendChoice(participant, canGiveTurnTo);
+		Messages.sendChoice(participant, possibleSuccessors);
 
 		return buildResult();
 	}
@@ -649,7 +908,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			} else {
 				const amountLeft = roundInfo().toAct.length;
 				const playersToAct = roundInfo().toAct.filter(isPlayer);
-				return amountLeft - playersToAct.length === 0 ? playersToAct : playersToAct.concat([ENEMY_GROUP_PARTICIPANT]);
+				return ((amountLeft - playersToAct.length) === 0) ? playersToAct : playersToAct.concat([ENEMY_GROUP_PARTICIPANT]);
 			}
 		} else {
 			return areAllTurnsDone() ? getAllParticipants() : roundInfo().toAct;
@@ -697,7 +956,9 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	function isPlayersTurn(playerID) {
 		const curParticipant = getCurrentParticipant();
-		if (playerIsGM(playerID)) {
+		if (!curParticipant) {
+			return false;
+		} else if (playerIsGM(playerID)) {
 			return DEBUG || isEnemy(curParticipant);
 		} else {
 			return curParticipant.playerIDs.includes(playerID);
@@ -764,20 +1025,15 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			stopCombat();
 		} else if (!getCurrentParticipant()) {
 			if (roundInfo().toAct.length > 0) {
-				swapTurn(roundInfo().toAct[0]);
+				setCurrentParticipant(roundInfo().toAct[0]);
 			} else {
-				swapTurn(getHighestInit());
+				setCurrentParticipant(getHighestInit());
 			}
 		} else if (isCombatRunning()) {
 			Messages.resendCurrentChoice();
 		}
 
 		syncTurnOrder();
-	}
-
-	function swapTurn(participant) {
-		roundInfo().curTurn--;
-		giveTurn(participant);
 	}
 
 	function getCurrentParticipant() {
@@ -792,8 +1048,15 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		Messages.postInfo('Ending combat. Hopefully no player died!');
 		resetParticipants();
 		resetRoundInfo();
+		if (config.tacticalDice.enabled) {
+			TacticalDice.reset();
+		}
 		resetTurnOrder();
 		hideTurnOrder();
+	}
+
+	function tacConfig(variable) {
+		return config.tacticalDice.enabled && config.tacticalDice[variable];
 	}
 
 	function showTurnOrder() {
@@ -806,20 +1069,25 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	class Messages {
 		static sendRaw(playerID, msg) {
-			Messages.sendChat('/w ' + getPlayerName(playerID) + ' ' + msg);
+			this._sendChatNoArchive('/w ' + getPlayerName(playerID) + ' ' + msg);
 		}
 
-		static sendChat(msg) {
+		static _sendChatNoArchive(msg) {
 			const msgWithoutLinebreaks = msg.replace(/\n/g, '<br/>');
-			sendChat(CHAT_NAME, msgWithoutLinebreaks, null, {noarchive: true});
+			this._sendChat(msgWithoutLinebreaks, null, {noarchive: true});
+		}
+
+		static _sendChat(msg, callback, options) {
+			const msgWithoutLinebreaks = msg.replace(/\n/g, '<br/>');
+			sendChat(CHAT_NAME, msgWithoutLinebreaks, callback, options);
 		}
 
 		static sendError(playerID, message, errors) {
-			Messages.sendRaw(playerID, Messages.createResultMessage('error', message, errors));
+			this.sendRaw(playerID, this.createResultMessage('error', message, errors));
 		}
 
 		static sendWarning(playerID, message, warnings) {
-			Messages.sendRaw(playerID, Messages.createResultMessage('warning', message, warnings));
+			this.sendRaw(playerID, this.createResultMessage('warning', message, warnings));
 		}
 
 		static createResultMessage(type, message, extraMessages) {
@@ -861,7 +1129,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static sendHelp(playerID) {
-			Messages.sendInfo(playerID, 'Unrecognized command');
+			this.sendInfo(playerID, 'Unrecognized command');
 
 			// TODO better help
 		}
@@ -875,33 +1143,34 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 
 			if (acted.length === 0) {
-				Messages.sendInfo(playerID, 'Noone acted this turn yet.');
+				this.sendInfo(playerID, 'Noone acted this turn yet.');
 			} else {
-				Messages.sendInfo(playerID, 'These participants already acted this turn: ' + acted.map(p => p.name).join(', '));
+				this.sendInfo(playerID, 'These participants already acted this turn: ' + acted.map(p => p.name).join(', '));
 			}
 
 			if (toAct.length === 0) {
-				Messages.sendInfo(playerID, 'Everyone acted already.');
+				this.sendInfo(playerID, 'Everyone acted already.');
 			} else {
-				Messages.sendInfo(playerID, 'These participants still have to act during this turn: ' + toAct.map(p => p.name).join(', '));
+				this.sendInfo(playerID, 'These participants still have to act during this turn: ' + toAct.map(p => p.name).join(', '));
 			}
 		}
 
 		static postInfo(message) {
-			Messages.postRaw(Messages.createResultMessage('info', message));
+			this.postRaw(this.createResultMessage('info', message));
 		}
 
 		static postRaw(message) {
-			Messages.sendChat(message);
+			this._sendChat(message);
 		}
 
 		static sendInfo(playerID, message) {
-			Messages.sendRaw(playerID, Messages.createResultMessage('info', message));
+			this.sendRaw(playerID, this.createResultMessage('info', message));
 		}
 
 		static sendChoice(participant, canGiveTurnTo) {
-			const buttons = Messages.buildGiveTurnButtons(canGiveTurnTo);
-			const buttonsString = buttons.join(' ');
+			const canGiveTurnToGrouped = _.groupBy(canGiveTurnTo, participant => isEnemy(participant) ? 'enemies' : 'players');
+			const playerButtons = this.buildGiveTurnButtons(canGiveTurnToGrouped.players || []).join(' ');
+			const enemyButtons = this.buildGiveTurnButtons(canGiveTurnToGrouped.enemies || []).join(' ');
 
 			const htmlBuilder = new HtmlBuilder();
 			const yourTurn = htmlBuilder.append('div', 'It\'s your turn, ', {
@@ -917,27 +1186,46 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				}
 			});
 			yourTurn.append('span', '!');
-			htmlBuilder.append('hr', null, {
-				style: {
-					'margin': '9px 0'
-				}
-			});
+			this._appendHR(htmlBuilder);
 			htmlBuilder.append('div', 'Give turn to:', {
 				style: {
 					'margin': '9px 0'
 				}
 			});
-			htmlBuilder.append('div', buttonsString);
 
-			Messages.sendParticipant(participant, htmlBuilder.toString());
+			if (isPlayer(participant) && playerButtons.length > 0) {
+				this._addTacDiceWarning(htmlBuilder, TacticalDice.PLAYERS);
+			}
+			htmlBuilder.append('div', playerButtons);
+			if (isEnemy(participant) && enemyButtons.length > 0) {
+				this._addTacDiceWarning(htmlBuilder, TacticalDice.ENEMIES);
+			}
+			htmlBuilder.append('div', enemyButtons);
+
+			this.sendParticipant(participant, htmlBuilder.toString());
+		}
+
+		static _addTacDiceWarning(htmlBuilder, team) {
+			if (TacticalDice.wouldGiveTacDice(team)) {
+				const wouldGiveTacDiceAmount = TacticalDice.wouldGiveTacDiceAmount(team);
+				const otherTeam = TacticalDice.getOtherTeam(team);
+				const message = 'Warning! Giving the turn to your team again would give the ' + otherTeam + ' ' + wouldGiveTacDiceAmount +
+					' tactical dice!';
+				htmlBuilder.append('div', message, {
+					style: {
+						'color': '#F00',
+						'margin': '9px 0'
+					}
+				});
+			}
 		}
 
 		static resendCurrentChoice() {
 			const curParticipant = getCurrentParticipant();
 			if (curParticipant.id === ENEMY_GROUP) {
-				Messages.sendGMChooseEnemy();
+				this.sendGMChooseEnemy();
 			} else {
-				Messages.sendChoice(curParticipant, getPossibleSuccessors(curParticipant));
+				this.sendChoice(curParticipant, getPossibleSuccessors(curParticipant));
 			}
 		}
 
@@ -948,37 +1236,42 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 
 			recipients.forEach(recipient => {
-				Messages.sendInfo(recipient, message);
+				this.sendInfo(recipient, message);
 			});
 		}
 
 		static buildGiveTurnButtons(canGiveTurnTo) {
 			return canGiveTurnTo.map(participant => {
 				const bgColor = isEnemy(participant) ? '#a12313' : '#117412';
-				return new HtmlBuilder('a', participant.name, {
-					href: COMMAND + ' giveturnAPI ' + participant.id,
-					style: {
-						'background-color': bgColor,
-						// 'padding': '5px',
-						// 'color': '#fff',
-						// 'font-weight': 'bold',
-						'border-radius': '6px',
-					}
-				}).toString();
+				return this.buildButton(participant.name, COMMAND + ' giveturnAPI ' + participant.id, bgColor);
 			});
+		}
+
+		static buildButton(label, link, style) {
+			if (typeof style === 'string') {
+				style = {
+					'background-color': style,
+					'font-weight': 'bold',
+					'border-radius': '6px',
+				};
+			}
+			return new HtmlBuilder('a', label, {
+				href: link,
+				style: style
+			}).toString();
 		}
 
 		static sendGMChooseEnemy() {
 			const canGiveTurnTo = getPossibleSuccessors(ENEMY_GROUP_PARTICIPANT);
-			const buttons = Messages.buildGiveTurnButtons(canGiveTurnTo);
+			const buttons = this.buildGiveTurnButtons(canGiveTurnTo);
 			const buttonsString = buttons.join(' ');
-			Messages.sendInfo('gm', 'Choose an enemy to get the next turn: ' + buttonsString);
+			this.sendInfo('gm', 'Choose an enemy to get the next turn: ' + buttonsString);
 		}
 
 		static sendStatus(playerID) {
-			Messages.sendParticipantsStatus(playerID);
-			Messages.sendTurnInfo(playerID);
-			Messages.sendActedStatus(playerID);
+			this.sendParticipantsStatus(playerID);
+			this.sendTurnInfo(playerID);
+			this.sendActedStatus(playerID);
 		}
 
 		static sendParticipantsStatus(playerID) {
@@ -988,19 +1281,19 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			} else {
 				visibleParticipants.push({name: 'a bunch of enemies'});
 			}
-			Messages.sendInfo(playerID, 'The following participants are in initiative: ' + '"' + visibleParticipants.map(p => p.name).join('", "') + '"');
+			this.sendInfo(playerID, 'The following participants are in initiative: ' + '"' + visibleParticipants.map(p => p.name).join('", "') + '"');
 		}
 
 		static sendTurnInfo(playerID) {
-			Messages.sendInfo(playerID, Messages.getTurnInfo());
+			this.sendInfo(playerID, this._getTurnInfo());
 		}
 
 		static postTurnInfo() {
-			Messages.postInfo(Messages.getTurnInfo());
+			this.postInfo(this._getTurnInfo());
 		}
 
 
-		static getTurnInfo() {
+		static _getTurnInfo() {
 			const curParticipant = getCurrentParticipant();
 			let name = (config.groupEnemies && isEnemy(curParticipant)) ? 'The enemies' : curParticipant.name;
 
@@ -1012,11 +1305,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 					'font-size': '1.3em',
 				}
 			});
-			htmlBuilder.append('hr', null, {
-				style: {
-					'margin': '9px 0'
-				}
-			});
+			if (config.tacticalDice.enabled) {
+				this._appendHR(htmlBuilder);
+				htmlBuilder.append('div', this._getTacticalDiceInfo());
+			}
+			this._appendHR(htmlBuilder);
 			const nowActing = htmlBuilder.append('div', 'Now acting: ');
 			const color = isEnemy(curParticipant) ? '#a12313' : '#117412';
 			nowActing.append('span', name, {
@@ -1029,6 +1322,35 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			return htmlBuilder.toString();
 		}
 
+		static sendTacticalDiceStatus(playerID) {
+			this.sendInfo(playerID, this._getTacticalDiceInfo());
+		}
+
+		static _getTacticalDiceInfo() {
+			const htmlBuilder = new HtmlBuilder();
+			const heading = htmlBuilder.append('p', 'Tactical dice', {
+				style: {
+					'font-weight': 'bold'
+				}
+			});
+			heading.append('span', ' (' + this.buildButton('Use one', COMMAND + ' tac use', {
+				'color': '#4273e7',
+				'background-color': 'transparent',
+				'text-decoration': 'underline',
+				'padding': '0'
+			}) + ')');
+			htmlBuilder.append('p', 'Players: ' + TacticalDice.getDice(TacticalDice.PLAYERS));
+			htmlBuilder.append('p', 'Enemies: ' + TacticalDice.getDice(TacticalDice.ENEMIES));
+			return htmlBuilder.toString();
+		}
+
+		static _appendHR(htmlBuilder) {
+			htmlBuilder.append('hr', null, {
+				style: {
+					'margin': '9px 0'
+				}
+			});
+		}
 
 	}
 
@@ -1037,4 +1359,3 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	});
 	return {};
 })();
-
