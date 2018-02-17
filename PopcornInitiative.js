@@ -1,7 +1,7 @@
 /* jshint -W132 */
 var PopcornInitiative = PopcornInitiative || (function() {
-	const DEBUG = false;
-	const DEBUG_LOG = false;
+	const DEBUG = true;
+	const DEBUG_LOG = true;
 
 	const COMMAND = '!pci';
 	const CHAT_NAME = 'Initiative';
@@ -114,7 +114,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			if (otherTeamSize >= teamSize) {
 				maxConsecutiveTurns = configuredValue;
 			} else {
-				maxConsecutiveTurns = Math.round(teamSize / otherTeamSize * configuredValue);
+				maxConsecutiveTurns = Math.floor(teamSize / otherTeamSize * configuredValue);
 			}
 			debug('maxConsecutiveTurns for team ', team, ': ', maxConsecutiveTurns);
 			return maxConsecutiveTurns;
