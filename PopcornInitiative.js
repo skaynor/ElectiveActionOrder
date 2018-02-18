@@ -1,6 +1,6 @@
 /* jshint -W132 */
 var PopcornInitiative = PopcornInitiative || (function() {
-	const DEBUG = true;
+	const DEBUG = false;
 	const DEBUG_LOG = true;
 
 	const COMMAND = '!pci';
@@ -216,10 +216,6 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		state.PopcornInitiative.tacticalDiceVar = {};
 		TacticalDice.fullReset();
 	}
-
-
-	state.PopcornInitiative.handleDeadToken = tokenDeadHandler;
-
 
 	const handlers = {
 		add: msg => {
@@ -445,13 +441,30 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			return;
 		}
 
-		const handler = handlers[options[1]];
+		const handlerName = options[1];
+		const handler = handlers[handlerName];
 		if (!handler) {
 			Messages.sendHelp(msg.playerid);
 			return;
 		}
 
-		handler(msg);
+		reportErrors(() => handler(msg), handlerName, msg.playerid);
+	}
+
+	function reportErrors(func, funcName, playerID) {
+		try {
+			func();
+		} catch (e) {
+			const error = JSON.stringify(e).replace(/\n/g, '\t');
+			const errorMessage = 'An unexpected error occured while running PopcornInitiative. Please send the contents ' +
+				'of the following box to https://app.roll20.net/users/2153524/timo . I\'m sorry for any inconvenience caused :( <br/>' +
+				'<pre>Error while executing ' + funcName + ': ' + error + '</pre>';
+			if (playerID) {
+				Messages.sendRaw(playerID, errorMessage);
+			} else {
+				Messages.postRaw(errorMessage);
+			}
+		}
 	}
 
 	function debug(...args) {
@@ -974,21 +987,23 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	function tokenDeadHandler(graphic) {
-		if (!graphic.get('status_dead')) {
-			return;
-		}
-		const id = graphic.get('_id');
-		const tokenIsEnemy = participants().enemyTokens[id];
-		if (!tokenIsEnemy) {
-			return;
-		}
-		const currentParticipant = getCurrentParticipant();
-		const participant = getAllParticipants().find(participant => participant.token === id);
-		if (!config.groupEnemies || isEnemy(currentParticipant)) {
-			Messages.sendParticipant(currentParticipant, participant.name + ' died, these are the new choices:');
-		}
+		reportErrors(() => {
+			if (!graphic.get('status_dead')) {
+				return;
+			}
+			const id = graphic.get('_id');
+			const tokenIsEnemy = participants().enemyTokens[id];
+			if (!tokenIsEnemy) {
+				return;
+			}
+			const currentParticipant = getCurrentParticipant();
+			const participant = getAllParticipants().find(participant => participant.token === id);
+			if (!config.groupEnemies || isEnemy(currentParticipant)) {
+				Messages.sendParticipant(currentParticipant, participant.name + ' died, these are the new choices:');
+			}
 
-		remove(participant);
+			remove(participant);
+		}, 'tokenDeadHandler');
 	}
 
 	function removeByTokenID(tokenID) {
@@ -1013,8 +1028,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		participants().players = participants().players.filter(shouldKeepParticipant);
 		participants().enemies = participants().enemies.filter(shouldKeepParticipant);
 		roundInfo().toAct = roundInfo().toAct.filter(shouldKeepParticipant);
-		if (participants().enemyTokens[participant.tokenID]) {
-			participants().enemyTokens[participant.tokenID] = false;
+		if (participants().enemyTokens[participant.token]) {
+			participants().enemyTokens[participant.token] = false;
 		}
 
 		participantsChanged();
@@ -1355,7 +1370,9 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	}
 
 	on('ready', () => {
-		log('Popcorn loaded');
+		log('PopcornInitiative loaded');
 	});
-	return {};
+	return {
+		handleDeadToken: tokenDeadHandler
+	};
 })();
