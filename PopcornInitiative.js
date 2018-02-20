@@ -721,6 +721,16 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		static removeByID(id) {
 			const toRemove = CombatParticipants.findAll().find(Participant.hasID(id));
 			if (!toRemove) {
+				// TODO error
+				return;
+			}
+			CombatParticipants.remove(toRemove);
+		}
+
+		static removeByName(name) {
+			const toRemove = CombatParticipants.findAll().find(participant => participant.name === name);
+			if (!toRemove) {
+				// TODO error
 				return;
 			}
 			CombatParticipants.remove(toRemove);
@@ -1223,20 +1233,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static _getOption(msg, idx) {
-			let options = msg.content.split(' ');
-
-			// skip command + sub command
-			let realIndex = idx + 2;
-
-			if (options.length < realIndex + 1) {
-				return undefined;
-			}
-
-			return options[realIndex];
+			return CommandLineInterface._getOptions(msg)[idx];
 		}
 
 		static _getRemainingOptions(msg, idx) {
-			const options = msg.content.split(' ');
+			const options = CommandLineInterface._splitMessage(msg.content);
 
 			// skip command + sub command
 			let realIndex = idx + 2;
@@ -1246,6 +1247,20 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 
 			return options.slice(realIndex);
+		}
+
+		static _splitMessage(msg) {
+			const captureOptionsRegex = /[^\s"]+|"([^"]*)"/gi;
+			const splitted = [];
+
+			let match;
+			do {
+				match = captureOptionsRegex.exec(msg);
+				if (match !== null) {
+					splitted.push(match[1] ? match[1] : match[0]);
+				}
+			} while (match !== null);
+			return splitted;
 		}
 
 		static _getOptions(msg) {
@@ -1343,10 +1358,10 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				return;
 			}
 
-			const id = CommandLineInterface._getOption(msg, 0);
+			const name = CommandLineInterface._getOption(msg, 0);
 
-			if (id) {
-				CombatParticipants.removeByID(id);
+			if (name) {
+				CombatParticipants.removeByName(name);
 				// TODO errors
 			} else {
 				const tokens = Messages.getSelectedTokens(msg);
@@ -1425,7 +1440,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			let participant = (config.groupEnemies && id === Initiative.ENEMY_TEAM) ? Initiative.ENEMY_TEAM_PARTICIPANT :
 				CombatParticipants.findByID(id);
 			if (!participant) {
-				Messages.sendError(playerID, 'You tried to give turn to ', id, ' but a participant with that ID does not exist!');
+				Messages.sendError(playerID, 'You tried to give turn to ' + id + ' but a participant with that ID does not exist! Maybe it died? ' +
+					'Use "' + CommandLineInterface.COMMAND + ' menu" to show an up-to-date menu.');
 				return;
 			}
 			const result = RoundInfo.giveTurn(participant);
