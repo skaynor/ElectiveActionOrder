@@ -85,10 +85,169 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			return msgBuilder.toString();
 		}
 
-		static sendHelp(playerID) {
-			Messages.sendInfo(playerID, 'Unrecognized command');
+		static sendHelp(playerID, helpTarget) {
+			const isGM = playerIsGM(playerID);
 
-			// TODO better help
+			const htmlBuilder = new HtmlBuilder();
+			const addMessage = (msg) => {
+				htmlBuilder.append('div', msg, {
+					style: {
+						'margin-left': '-43px',
+						'padding': '5px',
+						'font-family': 'Menlo,Monaco,Courier New,monospace',
+						'background-color': '#f5f5f5',
+						'border': '1px solid #ccc',
+						'border-radius': '5px',
+						'white-space': 'pre-wrap',
+						'font-size': '0.90em',
+						'line-height': '1.2em',
+					}
+				});
+			};
+
+			const teamParam = '[team]: Can be either "e", "enemies" for the enemy team or "p", "players" for the player team.\n' +
+				'If the team parameter is missing, the token will be added as player if the token represents a character that can be edited & ' +
+				'controlled by a player in this game, or as an enemy otherwise.\n';
+			const initParam = '[initiative]: Can be any valid roll20 dice expression. Must be enclosed in quotes (") if it contains spaces.\n' +
+				'If the initiative is missing, will attempt to read the initiative modifier of the character the token represents and roll ' +
+				'1d20+&lt;init-modifier&gt;, or fall back to using a single d20.\n';
+
+			const handlers = {
+				'add': () => {
+					addMessage('Adds the tokens that you have currently selected on the board to initiative.\n' +
+						'\n' +
+						'Usage:\n' +
+						'  ' + CommandLineInterface.COMMAND + ' add [team] [initiative]\n' +
+						'\n' +
+						teamParam +
+						'\n' +
+						initParam);
+				},
+				'add-name': () => {
+					addMessage('Adds a participant to initiative by name.\n' +
+						'\n' +
+						'Usage:\n' +
+						'  ' + CommandLineInterface.COMMAND + ' add-name &lt;name&gt; [team] [initiative]\n' +
+						'\n' +
+						'&lt;name&gt;:  The name that should be added to initiative. Must be enclosed in quotes (") if it contains spaces.\n' +
+						'\n' +
+						teamParam +
+						'\n' +
+						initParam);
+				},
+				'menu': () => {
+					addMessage('Shows you the current menu which allows you to choose the next one to give the turn to. Useful if there were many ' +
+						'chat lines since the last menu was posted.\n' +
+						'\n' +
+						'Usage:\n' +
+						'  ' + CommandLineInterface.COMMAND + ' menu');
+				},
+				'remove': () => {
+					addMessage('Removes the selected token or given name.\n' +
+						'\n' +
+						'Usage:\n' +
+						'  ' + CommandLineInterface.COMMAND + ' remove [name]\n' +
+						'  \n' +
+						'[name]:  The name that should be removed from initiative. Must be enclosed in quotes (") if it contains spaces.\n' +
+						'If it is empty, will remove the currently selected tokens on the board from initiative.');
+				},
+				'reset': () => {
+					addMessage('Resets the entirety of PopcornInitiatives data. Everything will be lost, use with caution!\n' +
+						'\n' +
+						'Usage:\n' +
+						'  ' + CommandLineInterface.COMMAND + ' reset');
+				},
+				'start': () => {
+					addMessage('Starts combat with the previously added participants (using "' + CommandLineInterface.COMMAND + ' add" or "' +
+						CommandLineInterface.COMMAND + ' add-name"). Will also ' +
+						'automatically add any tokens that are currently in the roll20 turn tracker.\n' +
+						'\n' +
+						'Usage:\n' +
+						'  ' + CommandLineInterface.COMMAND + ' start');
+				},
+				'status': () => {
+					addMessage('Prints the current status of PopcornInitiative.\n' +
+						'\n' +
+						'Usage:\n' +
+						'  ' + CommandLineInterface.COMMAND + ' status');
+				},
+				'stop': () => {
+					addMessage('Stops the combat and removes all participants.\n' +
+						'\n' +
+						'Usage:\n' +
+						'  ' + CommandLineInterface.COMMAND + ' stop');
+				},
+				'tac': () => {
+					if (isGM) {
+						addMessage('Shows tactical dice status or uses, adds or sets tactical dice for a team.\n' +
+							'\n' +
+							'Usage:\n' +
+							'  ' + CommandLineInterface.COMMAND + ' tac [use|add|set] [team] [amount]\n' +
+							'  \n' +
+							'no parameters: Shows the amount of tactical dice each team has.\n' +
+							'  \n' +
+							'use: Uses a single tactical die for the given team, or, if the team is empty, for the enemy team.\n' +
+							'  \n' +
+							'add: Adds the given amount to the given teams tactical dice pool.\n' +
+							'  \n' +
+							'set: Sets the amount of tactical dice the given team has.\n' +
+							'  \n' +
+							teamParam +
+							'\n' +
+							'[amount]: Has to be a positive whole number. Can be negative for &lt;add&gt;.');
+					} else {
+						addMessage('Shows tactical dice status or uses a tactical die for your team.\n' +
+							'\n' +
+							'Usage:\n' +
+							'  ' + CommandLineInterface.COMMAND + ' [use]\n' +
+							'  \n' +
+							'no parameters: Shows the amount of tactical dice each team has.\n' +
+							'\n' +
+							'[use]: Uses a single tactical die for the player team.');
+					}
+				},
+				'express': () => {
+					addMessage('Choo chooo! The PCI express is getting ready to leave at x16:00!');
+				}
+			};
+
+			const handler = handlers[helpTarget];
+			if (!handler) {
+				let message;
+				if (helpTarget) {
+					message = 'Unrecognized help option: ' + helpTarget + '\n\n';
+				} else {
+					message = '';
+				}
+
+				message += 'Popcorn Initiative\n' +
+					'\n' +
+					'Usage:\n' +
+					'  ' + CommandLineInterface.COMMAND + ' &lt;command&gt; [further options]\n' +
+					'  \n' +
+					'&lt;&gt; signifies required parameters, [] signifies optional ones.\n' +
+					'You\'re a ' + (isGM ? 'GM' : 'player') + ', so you can use the following commands:\n' +
+					'\n' +
+					'  ' + (isGM ? 'add, add-name, help, menu, remove, reset, start, status, stop, tac' : 'help, menu, status, tac') + '\n' +
+					'\n' +
+					'For further info, type "' + CommandLineInterface.COMMAND + ' help &lt;command&gt;"';
+				if (isGM) {
+					message += '\n' +
+						'\n' +
+						'The basic workflow is creating enemy tokens on the board, selecting them, adding them to initiative using "' +
+						CommandLineInterface.COMMAND + ' add" and ' +
+						'then starting the combat using "' + CommandLineInterface.COMMAND + ' start".\n' +
+						'Tokens will be removed automatically from initiative when you add the dead marker to them (the big red cross) or can be ' +
+						'removed manually using "' + CommandLineInterface.COMMAND + ' remove".\n' +
+						'If no enemy tokens remain, the combat will automatically stop, or it can be stopped manually using "' +
+						CommandLineInterface.COMMAND + ' stop".';
+				}
+				addMessage(message);
+			} else {
+				handler();
+			}
+
+			Messages.sendRaw(playerID, htmlBuilder.toString());
 		}
 
 		static sendActedStatus(playerID) {
@@ -329,6 +488,21 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	class Participant {
 
+		constructor(id, name, token, team, init, playerIDs) {
+			if (!id) {
+				throw new Error('Participant created without ID!');
+			}
+			if (playerIDs && playerIDs.length === undefined) {
+				throw new Error('Tried to create participant where playerIDs is not an array: ' + playerIDs);
+			}
+			this.id = id;
+			this.name = name;
+			this.token = token;
+			this.team = team;
+			this.init = init;
+			this.playerIDs = playerIDs || [];
+		}
+
 		static fromObj(obj) {
 			return new Participant(obj.id, obj.name, obj.token, obj.team, obj.init, obj.playerIDs);
 		}
@@ -361,21 +535,6 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			const participantObj = participant.toObj();
 			const insertIndex = _.sortedIndex(list, participantObj, 'name');
 			list.splice(insertIndex, 0, participantObj);
-		}
-
-		constructor(id, name, token, team, init, playerIDs) {
-			if (!id) {
-				throw new Error('Participant created without ID!');
-			}
-			if (playerIDs && playerIDs.length === undefined) {
-				throw new Error('Tried to create participant where playerIDs is not an array: ' + playerIDs);
-			}
-			this.id = id;
-			this.name = name;
-			this.token = token;
-			this.team = team;
-			this.init = init;
-			this.playerIDs = playerIDs || [];
 		}
 
 		isNPC() {
@@ -1044,22 +1203,26 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		static create() {
 			CommandLineInterface._handlers = {
-				add: CommandLineInterface.add,
-				addName: CommandLineInterface.addName,
-				remove: CommandLineInterface.remove,
-				start: CommandLineInterface.start,
-				stop: CommandLineInterface.stop,
-				giveTurnAPI: CommandLineInterface.giveTurn,
-				reset: CommandLineInterface.reset,
-				status: CommandLineInterface.status,
-				menu: CommandLineInterface.menu,
-				tac: CommandLineInterface.tacticalDice
+				'add': CommandLineInterface.add,
+				'add-name': CommandLineInterface.addName,
+				'giveTurnAPI': CommandLineInterface.giveTurn,
+				'help': CommandLineInterface.help,
+				'menu': CommandLineInterface.menu,
+				'remove': CommandLineInterface.remove,
+				'reset': CommandLineInterface.reset,
+				'start': CommandLineInterface.start,
+				'status': CommandLineInterface.status,
+				'stop': CommandLineInterface.stop,
+				'tac': CommandLineInterface.tacticalDice,
+				'express': (msg) => {
+					Messages.sendInfo(msg.playerid, 'Choo chooo! The PCI express is getting ready to leave at x16:00!');
+				}
 			};
 
 			on('chat:message', CommandLineInterface._messageHandler);
 		}
 
-		static getOption(msg, idx) {
+		static _getOption(msg, idx) {
 			let options = msg.content.split(' ');
 
 			// skip command + sub command
@@ -1072,7 +1235,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			return options[realIndex];
 		}
 
-		static getRemainingOptions(msg, idx) {
+		static _getRemainingOptions(msg, idx) {
 			const options = msg.content.split(' ');
 
 			// skip command + sub command
@@ -1085,8 +1248,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			return options.slice(realIndex);
 		}
 
-		static getOptions(msg) {
-			return this.getRemainingOptions(msg, 0);
+		static _getOptions(msg) {
+			return this._getRemainingOptions(msg, 0);
 		}
 
 		static _messageHandler(msg) {
@@ -1125,6 +1288,14 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			return this._isEnemyTeam(option) || this._isPlayerTeam(option);
 		}
 
+		static _getTeam(option) {
+			if (!CommandLineInterface._isTeam(option)) {
+				return undefined;
+			}
+
+			return CommandLineInterface._isPlayerTeam(option) ? Initiative.PLAYER_TEAM : Initiative.ENEMY_TEAM;
+		}
+
 		static add(msg) {
 			const playerID = msg.playerid;
 			if (!playerIsGM(playerID)) {
@@ -1132,7 +1303,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				return;
 			}
 
-			const options = CommandLineInterface.getOptions(msg);
+			const options = CommandLineInterface._getOptions(msg);
 			if (CommandLineInterface._isTeam(options[0])) {
 				const initiative = options[1];
 				const team = CommandLineInterface._getTeam(options[0]);
@@ -1140,7 +1311,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			} else if (options.length < 2) {
 				Initiative.addSelection(playerID, Messages.getSelectedTokens(msg), null, options[0]);
 			} else {
-				const options = CommandLineInterface.getRemainingOptions(msg, 0).join(' ');
+				const options = CommandLineInterface._getRemainingOptions(msg, 0).join(' ');
 				Messages.sendError(playerID, 'Unrecognized set of options for adding: "' + options +
 					'". Try "' + CommandLineInterface.COMMAND + ' help"');
 			}
@@ -1153,7 +1324,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				return;
 			}
 
-			const options = CommandLineInterface.getOptions(msg);
+			const options = CommandLineInterface._getOptions(msg);
 			if (options.length === 0) {
 				Messages.sendError(playerID, 'No name given to add.');
 			}
@@ -1172,7 +1343,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				return;
 			}
 
-			const id = CommandLineInterface.getOption(msg, 0);
+			const id = CommandLineInterface._getOption(msg, 0);
 
 			if (id) {
 				CombatParticipants.removeByID(id);
@@ -1250,7 +1421,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				Messages.sendError(playerID, 'It\'s not your turn!');
 				return;
 			}
-			const id = CommandLineInterface.getOption(msg, 0);
+			const id = CommandLineInterface._getOption(msg, 0);
 			let participant = (config.groupEnemies && id === Initiative.ENEMY_TEAM) ? Initiative.ENEMY_TEAM_PARTICIPANT :
 				CombatParticipants.findByID(id);
 			if (!participant) {
@@ -1406,7 +1577,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				}
 			};
 
-			const options = CommandLineInterface.getOptions(msg);
+			const options = CommandLineInterface._getOptions(msg);
 			const handleFunc = handlers[options[0]];
 			if (!handleFunc) {
 				Messages.sendError(playerID, 'Unrecognized option "' + options[0] + '"');
@@ -1415,12 +1586,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 		}
 
-		static _getTeam(option) {
-			if (!CommandLineInterface._isTeam(option)) {
-				return undefined;
-			}
+		static help(msg) {
+			const playerID = msg.playerid;
+			const helpTarget = CommandLineInterface._getOption(msg, 0);
 
-			return CommandLineInterface._isPlayerTeam(option) ? Initiative.PLAYER_TEAM : Initiative.ENEMY_TEAM;
+			Messages.sendHelp(playerID, helpTarget);
 		}
 	}
 
