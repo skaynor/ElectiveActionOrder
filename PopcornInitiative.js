@@ -88,21 +88,9 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		static sendHelp(playerID, helpTarget) {
 			const isGM = playerIsGM(playerID);
 
-			const htmlBuilder = new HtmlBuilder();
+			let message = '';
 			const addMessage = (msg) => {
-				htmlBuilder.append('div', msg, {
-					style: {
-						'margin-left': '-43px',
-						'padding': '5px',
-						'font-family': 'Menlo,Monaco,Courier New,monospace',
-						'background-color': '#f5f5f5',
-						'border': '1px solid #ccc',
-						'border-radius': '5px',
-						'white-space': 'pre-wrap',
-						'font-size': '0.90em',
-						'line-height': '1.2em',
-					}
-				});
+				message += msg;
 			};
 
 			const teamParam = '[team]: Can be either "e", "enemies" for the enemy team or "p", "players" for the player team.\n' +
@@ -135,6 +123,27 @@ var PopcornInitiative = PopcornInitiative || (function() {
 						'\n' +
 						initParam);
 				},
+				'config': () => {
+					if (isGM) {
+						addMessage('Shows the current config values or lets you set them.\n' +
+							'\n' +
+							'Usage:\n' +
+							'  !pci config [property [value]]\n' +
+							'  \n' +
+							'[property]: Name of the config property, for example "tacticalDice.enabled".\n' +
+							'If this and the value are left empty, prints all current config values.\n' +
+							'[value]: The value for the property.\n' +
+							'If this is left empty, shows info about the config property and which values are accepted.');
+					} else {
+						addMessage('Shows the current config values.\n' +
+							'\n' +
+							'Usage:\n' +
+							'  !pci config [property]\n' +
+							'  \n' +
+							'[property]: Shows information about the given property.\n' +
+							'If left empty, prints all current config values.');
+					}
+				},
 				'menu': () => {
 					addMessage('Shows you the current menu which allows you to choose the next one to give the turn to. Useful if there were many ' +
 						'chat lines since the last menu was posted.\n' +
@@ -151,11 +160,17 @@ var PopcornInitiative = PopcornInitiative || (function() {
 						'[name]:  The name that should be removed from initiative. Must be enclosed in quotes (") if it contains spaces.\n' +
 						'If it is empty, will remove the currently selected tokens on the board from initiative.');
 				},
-				'reset': () => {
+				'reset-all-data': () => {
 					addMessage('Resets the entirety of PopcornInitiatives data. Everything will be lost, use with caution!\n' +
 						'\n' +
 						'Usage:\n' +
-						'  ' + CommandLineInterface.COMMAND + ' reset');
+						'  ' + CommandLineInterface.COMMAND + ' reset-all-data');
+				},
+				'reset-config-to-default': () => {
+					addMessage('Resets the config back to default values.\n' +
+					'\n' +
+					'Usage:\n'+
+					'  ' + CommandLineInterface.COMMAND + ' reset-config-to-default');
 				},
 				'start': () => {
 					addMessage('Starts combat with the previously added participants (using "' + CommandLineInterface.COMMAND + ' add" or "' +
@@ -213,14 +228,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 			const handler = handlers[helpTarget];
 			if (!handler) {
-				let message;
 				if (helpTarget) {
-					message = 'Unrecognized help option: ' + helpTarget + '\n\n';
-				} else {
-					message = '';
+					addMessage('Unrecognized help option: ' + helpTarget + '\n\n');
 				}
 
-				message += 'Popcorn Initiative\n' +
+				addMessage('Popcorn Initiative\n' +
 					'\n' +
 					'Usage:\n' +
 					'  ' + CommandLineInterface.COMMAND + ' &lt;command&gt; [further options]\n' +
@@ -228,11 +240,14 @@ var PopcornInitiative = PopcornInitiative || (function() {
 					'&lt;&gt; signifies required parameters, [] signifies optional ones.\n' +
 					'You\'re a ' + (isGM ? 'GM' : 'player') + ', so you can use the following commands:\n' +
 					'\n' +
-					'  ' + (isGM ? 'add, add-name, help, menu, remove, reset, start, status, stop, tac' : 'help, menu, status, tac') + '\n' +
+					'  ' +
+					(isGM ?
+						'add, add-name, config, help, menu, remove, reset-all-data, reset-config-to-default, start, status, stop, tac' :
+						'config, help, menu, status, tac') + '\n' +
 					'\n' +
-					'For further info, type "' + CommandLineInterface.COMMAND + ' help &lt;command&gt;"';
+					'For further info, type "' + CommandLineInterface.COMMAND + ' help &lt;command&gt;"');
 				if (isGM) {
-					message += '\n' +
+					addMessage('\n' +
 						'\n' +
 						'The basic workflow is creating enemy tokens on the board, selecting them, adding them to initiative using "' +
 						CommandLineInterface.COMMAND + ' add" and ' +
@@ -240,20 +255,19 @@ var PopcornInitiative = PopcornInitiative || (function() {
 						'Tokens will be removed automatically from initiative when you add the dead marker to them (the big red cross) or can be ' +
 						'removed manually using "' + CommandLineInterface.COMMAND + ' remove".\n' +
 						'If no enemy tokens remain, the combat will automatically stop, or it can be stopped manually using "' +
-						CommandLineInterface.COMMAND + ' stop".';
+						CommandLineInterface.COMMAND + ' stop".');
 				}
-				addMessage(message);
 			} else {
 				handler();
 			}
 
-			Messages.sendRaw(playerID, htmlBuilder.toString());
+			Messages.sendPre(playerID, message);
 		}
 
 		static sendActedStatus(playerID) {
 			let acted = CombatParticipants.findAll().filter(RoundInfo.hasActed);
 			let toAct = RoundInfo.findAllToAct();
-			if (config.groupEnemies && !playerIsGM(playerID)) {
+			if (Config.get().groupEnemies && !playerIsGM(playerID)) {
 				acted = Messages._replaceWithGroupedEnemies(acted);
 				toAct = Messages._replaceWithGroupedEnemies(toAct);
 			}
@@ -334,7 +348,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static _getTeamColor(team) {
-			return team === Initiative.PLAYER_TEAM ? config.colors.players : config.colors.enemies;
+			return team === Initiative.PLAYER_TEAM ? Config.get().colors.players : Config.get().colors.enemies;
 		}
 
 		static _addTacDiceWarning(htmlBuilder, team) {
@@ -395,6 +409,41 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			Messages.sendInfo('gm', 'Choose an enemy to get the next turn: ' + buttonsString);
 		}
 
+		static sendConfig(playerID) {
+			let config = Config.get();
+			const configString = new HtmlBuilder('table', Messages._toConfigTableRows(config)).toString();
+			Messages.sendInfo(playerID, configString);
+		}
+
+		static _toConfigTableRows(object, prepend) {
+			prepend = prepend || '';
+			const entries = Object.entries(object);
+			const configLines = entries.map(([key, value]) => {
+				if (typeof value === 'object') {
+					return Messages._toConfigTableRows(value, prepend + key + '.');
+				} else {
+					return '<tr><th style="text-align: left">' + prepend + key + '</th><td>' + value + '</td></tr>';
+				}
+			});
+			return configLines.join('');
+		}
+
+		static sendPre(playerID, message) {
+			Messages.sendRaw(playerID, new HtmlBuilder('div', message, {
+				style: {
+					'margin-left': '-43px',
+					'padding': '5px',
+					'font-family': 'Menlo,Monaco,Courier New,monospace',
+					'background-color': '#f5f5f5',
+					'border': '1px solid #ccc',
+					'border-radius': '5px',
+					'white-space': 'pre-wrap',
+					'font-size': '0.90em',
+					'line-height': '1.2em',
+				}
+			}).toString());
+		}
+
 		static sendStatus(playerID) {
 			Messages.sendParticipantsStatus(playerID);
 			Messages.sendTurnInfo(playerID);
@@ -403,7 +452,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		static sendParticipantsStatus(playerID) {
 			let visibleParticipants = CombatParticipants.findPlayers();
-			if (!config.groupEnemies || playerIsGM(playerID)) {
+			if (!Config.get().groupEnemies || playerIsGM(playerID)) {
 				visibleParticipants.push(...CombatParticipants.findEnemies());
 			} else {
 				visibleParticipants.push({name: 'a bunch of enemies'});
@@ -424,7 +473,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		static _getTurnInfo() {
 			const curParticipant = RoundInfo.findCurrentParticipant();
 			Util.debug('cur participant: ', curParticipant);
-			let name = (config.groupEnemies && curParticipant.isEnemy()) ? 'The enemies' : curParticipant.name;
+			let name = (Config.get().groupEnemies && curParticipant.isEnemy()) ? 'The enemies' : curParticipant.name;
 
 			const htmlBuilder = new HtmlBuilder();
 			htmlBuilder.append('div', 'Round ' + RoundInfo.getCurrentRound() + ', Turn ' + RoundInfo.getCurrentTurn(), {
@@ -434,7 +483,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 					'font-size': '1.3em',
 				}
 			});
-			if (config.tacticalDice.enabled) {
+			if (Config.get().tacticalDice.enabled) {
 				Messages._appendHR(htmlBuilder);
 				htmlBuilder.append('div', Messages._getTacticalDiceInfo());
 			}
@@ -712,28 +761,25 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		static removeByTokenID(tokenID) {
 			const participant = CombatParticipants.findAll().find(participant => participant.token === tokenID);
 			if (!participant) {
-				// TODO error
-				return;
+				return Result.createError('No participant with the given tokenID (' + tokenID + ') exists.');
 			}
-			CombatParticipants.remove(participant);
+			return CombatParticipants.remove(participant);
 		}
 
 		static removeByID(id) {
 			const toRemove = CombatParticipants.findAll().find(Participant.hasID(id));
 			if (!toRemove) {
-				// TODO error
-				return;
+				return Result.createError('No participant with the given ID (' + id + ') exists.');
 			}
-			CombatParticipants.remove(toRemove);
+			return CombatParticipants.remove(toRemove);
 		}
 
 		static removeByName(name) {
 			const toRemove = CombatParticipants.findAll().find(participant => participant.name === name);
 			if (!toRemove) {
-				// TODO error
-				return;
+				return Result.createError('No participant with the given name (' + name + ') exists.');
 			}
-			CombatParticipants.remove(toRemove);
+			return CombatParticipants.remove(toRemove);
 		}
 
 		static remove(participant) {
@@ -764,8 +810,9 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				Initiative.stopCombat();
 			}
 
-
 			TurnOrderSynchronizer.sync();
+
+			return Result.create();
 		}
 
 		static tokenDeadHandler(graphic) {
@@ -780,7 +827,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				const currentParticipant = RoundInfo.findCurrentParticipant();
 				const participant = CombatParticipants.findAll().find(participant => participant.token === id);
 				if ((RoundInfo.hasToAct(participant) || RoundInfo.areAllTurnsDone())) {
-					const name = (!config.groupEnemies || currentParticipant.isEnemy()) ? participant.name : 'An enemy';
+					const name = (!Config.get().groupEnemies || currentParticipant.isEnemy()) ? participant.name : 'An enemy';
 					Messages.sendInfoParticipant(currentParticipant, name + ' died, these are the new choices:');
 				}
 
@@ -924,7 +971,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			RoundInfo._curTurn = -1;
 			RoundInfo._toAct = CombatParticipants.findAll();
 
-			if (config.tacticalDice.enabled) {
+			if (Config.get().tacticalDice.enabled) {
 				TacticalDice.newRound();
 			}
 		}
@@ -938,7 +985,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				RoundInfo._curTurn += 1;
 				Util.debug('New turn: ' + RoundInfo._curTurn);
 
-				if (config.tacticalDice.enabled) {
+				if (Config.get().tacticalDice.enabled) {
 					TacticalDice.addTurn(participant.team);
 				}
 
@@ -1036,7 +1083,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 					});
 				}
 			}
-			if (config.groupEnemies && participant.isPlayer()) {
+			if (Config.get().groupEnemies && participant.isPlayer()) {
 				if (RoundInfo.areAllTurnsDone()) {
 					return CombatParticipants.findPlayers().concat([Initiative.ENEMY_TEAM_PARTICIPANT]);
 				} else {
@@ -1084,7 +1131,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static reset() {
-			if (!config.tacticalDice.persist) {
+			if (!Config.get().tacticalDice.persist) {
 				TacticalDice._resetDice();
 			}
 			TacticalDice._consecutiveTurns = 0;
@@ -1102,7 +1149,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static getDice(team) {
-			return TacticalDice._stateVar[team] + config.tacticalDice.die;
+			return TacticalDice._stateVar[team] + Config.get().tacticalDice.die;
 		}
 
 		static getDiceAmount(team) {
@@ -1149,9 +1196,9 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static _getMaxConsecutiveTurns(team) {
-			const configuredValue = config.tacticalDice.maxConsecutiveTurns;
+			const configuredValue = Config.get().tacticalDice.maxConsecutiveTurns;
 
-			if (!config.tacticalDice.teamSizeAdjustment) {
+			if (!Config.get().tacticalDice.teamSizeAdjustment) {
 				return configuredValue;
 			}
 
@@ -1181,7 +1228,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				return 0;
 			}
 
-			if (config.tacticalDice.amountIncreasingPerTurn) {
+			if (Config.get().tacticalDice.amountIncreasingPerTurn) {
 				return TacticalDice._consecutiveTurns - TacticalDice._getMaxConsecutiveTurns(team) + 1;
 			} else {
 				return 1;
@@ -1189,7 +1236,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static wouldGiveTacDiceAmount(team) {
-			return TacticalDice._wouldGiveTacDiceAmount(team) + config.tacticalDice.die;
+			return TacticalDice._wouldGiveTacDiceAmount(team) + Config.get().tacticalDice.die;
 		}
 
 		static useDie(team) {
@@ -1200,7 +1247,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 					return;
 				}
 				TacticalDice.setDice(team, dice - 1);
-				Util.roll(1 + config.tacticalDice.die).then(roll => {
+				Util.roll(1 + Config.get().tacticalDice.die).then(roll => {
 					resolve(Result.create(roll));
 				}).catch(reason => {
 					resolve(Result.createError('Error while rolling: ' + reason));
@@ -1215,11 +1262,13 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			CommandLineInterface._handlers = {
 				'add': CommandLineInterface.add,
 				'add-name': CommandLineInterface.addName,
+				'config': CommandLineInterface.config,
 				'giveTurnAPI': CommandLineInterface.giveTurn,
 				'help': CommandLineInterface.help,
 				'menu': CommandLineInterface.menu,
 				'remove': CommandLineInterface.remove,
-				'reset': CommandLineInterface.reset,
+				'reset-all-data': CommandLineInterface.reset,
+				'reset-config-to-default': CommandLineInterface.applyDefaultConfig,
 				'start': CommandLineInterface.start,
 				'status': CommandLineInterface.status,
 				'stop': CommandLineInterface.stop,
@@ -1351,6 +1400,45 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			Initiative.add(playerID, name, team, initiative);
 		}
 
+		static config(msg) {
+			const playerID = msg.playerid;
+			const options = CommandLineInterface._getOptions(msg);
+
+			if (options.length === 0) {
+				Messages.sendConfig(playerID);
+			} else if (!playerIsGM(playerID)) {
+				Messages.sendError(playerID, 'Only the GM can set the config.');
+			} else if (options.length === 2) {
+				const result = Config.set(options[0], options[1]);
+				if (result.hasErrors()) {
+					Messages.sendError(playerID, 'Error while setting config value.', result.errors);
+				} else {
+					Messages.sendInfo(playerID, 'Successfully set config property "' + options[0] + '" to "' + options[1] + '".');
+				}
+			} else if (options.length === 1) {
+				const propertyInfo = Config.getInfo(options[0]);
+				if (!propertyInfo) {
+					Messages.sendError(playerID, 'The given config property (' + options[0] + ') does not exist.');
+					return;
+				}
+
+				Messages.sendInfo(playerID, '<strong>' + options[0] + '</strong>\n\n' + propertyInfo.description + '\n\nAllowed values: ' +
+					propertyInfo.allowedValues);
+			} else {
+				Messages.sendError(playerID, 'Invalid arguments. Check "' + CommandLineInterface.COMMAND + ' help config"');
+			}
+		}
+
+		static applyDefaultConfig(msg) {
+			const playerID = msg.playerid;
+			if (!playerIsGM(playerID)) {
+				Messages.sendError(playerID, 'Only the GM can reset the config back to default.');
+				return;
+			}
+			Config.applyDefaults();
+			Messages.sendInfo(playerID, 'Successfully reset the config to the default values.');
+		}
+
 		static remove(msg) {
 			const playerID = msg.playerid;
 			if (!playerIsGM(playerID)) {
@@ -1360,16 +1448,27 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 			const name = CommandLineInterface._getOption(msg, 0);
 
+			const handleRemoveResult = (result, name) => {
+				if (result.hasErrors()) {
+					Messages.sendError(playerID, 'Could not remove "' + name + '".', result.errors);
+				} else {
+					Messages.sendInfo(playerID, 'Successfully removed "' + name + '".');
+				}
+			};
 			if (name) {
-				CombatParticipants.removeByName(name);
-				// TODO errors
+				const result = CombatParticipants.removeByName(name);
+				handleRemoveResult(result, name);
 			} else {
-				const tokens = Messages.getSelectedTokens(msg);
-				const selectionIDs = tokens.map(token => token.id);
-				selectionIDs.forEach(CombatParticipants.removeByTokenID);
-				// TODO errors
+				const selectedTokens = Messages.getSelectedTokens(msg);
+				const selectionIDs = selectedTokens.map(token => token.id);
+				const tokenResults = selectionIDs.map(Token.findByID);
+				// Should never fail, as we only got valid tokens from Messages.getSelectedTokens
+				const tokens = tokenResults.map((result) => result.val);
+				tokens.forEach((token) => {
+					const result = CombatParticipants.removeByTokenID(token.id);
+					handleRemoveResult(result, token.name);
+				});
 			}
-
 		}
 
 		static start(msg) {
@@ -1437,7 +1536,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				return;
 			}
 			const id = CommandLineInterface._getOption(msg, 0);
-			let participant = (config.groupEnemies && id === Initiative.ENEMY_TEAM) ? Initiative.ENEMY_TEAM_PARTICIPANT :
+			let participant = (Config.get().groupEnemies && id === Initiative.ENEMY_TEAM) ? Initiative.ENEMY_TEAM_PARTICIPANT :
 				CombatParticipants.findByID(id);
 			if (!participant) {
 				Messages.sendError(playerID, 'You tried to give turn to ' + id + ' but a participant with that ID does not exist! Maybe it died? ' +
@@ -1461,6 +1560,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			CombatParticipants.reset();
 			RoundInfo.reset();
 			TacticalDice.fullReset();
+			Config.applyDefaults();
 			Messages.sendInfo(playerID, 'Popcorn initiative has been reset.');
 		}
 
@@ -1499,7 +1599,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		static tacticalDice(msg) {
 			const playerID = msg.playerid;
-			if (!config.tacticalDice.enabled) {
+			if (!Config.get().tacticalDice.enabled) {
 				Messages.sendError(playerID, 'Tactical dice are not enabled.');
 				return;
 			}
@@ -1521,7 +1621,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 						const roll = result.val;
 						const remaining = TacticalDice.getDice(team);
 						Messages.postInfo('"' + msg.who + '" used a tactical die for the ' + team +
-							' (' + remaining + ' remaining).\n\nRoll result (1' + config.tacticalDice.die + '): ' + roll);
+							' (' + remaining + ' remaining).\n\nRoll result (1' + Config.get().tacticalDice.die + '): ' + roll);
 					});
 				},
 				'add': (options) => {
@@ -1695,7 +1795,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			const currentParticipant = RoundInfo.findCurrentParticipant();
 
 			let currentEntry;
-			if (config.groupEnemies && currentParticipant.isEnemy()) {
+			if (Config.get().groupEnemies && currentParticipant.isEnemy()) {
 				currentEntry = TurnOrderSynchronizer._buildEnemiesTurnOrderEntry();
 			} else {
 				currentEntry = TurnOrder.buildTurnOrderEntry(currentParticipant);
@@ -1706,7 +1806,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			const filterCurrent = participants => participants.filter(_.negate(Participant.hasID(currentParticipant.id)));
 
 			let restTurnOrderEntries;
-			if (config.groupEnemies) {
+			if (Config.get().groupEnemies) {
 				restTurnOrderEntries = TurnOrderSynchronizer._buildTurnOrderEntries(filterCurrent(CombatParticipants.findPlayers()));
 				Util.debug('Rest players: ', restTurnOrderEntries);
 				if (currentParticipant.isFriendly()) {
@@ -2012,6 +2112,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			CombatParticipants.initializeStateVars();
 			RoundInfo.initializeStateVars();
 			TacticalDice.initializeStateVars();
+			Config.initializeStateVars();
 		}
 
 
@@ -2020,7 +2121,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			const playerMessage = 'Starting combat with ' + players.length + ' player' + ((players.length !== 1) ? 's' : '') + ': ' +
 				players.join(', ');
 			const hfgl = '! Have fun ;)';
-			if (config.groupEnemies) {
+			if (Config.get().groupEnemies) {
 				Messages.postInfo(playerMessage + hfgl);
 			} else {
 				const enemies = CombatParticipants.findEnemies().map(enemy => enemy.name + ' (Init: ' + enemy.init + ')');
@@ -2029,13 +2130,13 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 			TurnOrder.show();
 			RoundInfo.reset();
-			if (config.tacticalDice.enabled) {
+			if (Config.get().tacticalDice.enabled) {
 				TacticalDice.reset();
 			}
 			RoundInfo.startNewRound();
 			const highestInit = CombatParticipants.findParticipantWithHighestInit();
 			Util.debug('startCombat highest init: ', highestInit);
-			if (config.groupEnemies && highestInit.isEnemy()) {
+			if (Config.get().groupEnemies && highestInit.isEnemy()) {
 				Messages.postInfo('An enemy won initiative with a ' + highestInit.init + ' and will start the combat!');
 			} else {
 				Messages.postInfo(highestInit.name + ' won initiative with a ' + highestInit.init + '!');
@@ -2047,7 +2148,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			Messages.postInfo('Ending combat. Hopefully no player died!');
 			CombatParticipants.reset();
 			RoundInfo.reset();
-			if (config.tacticalDice.enabled) {
+			if (Config.get().tacticalDice.enabled) {
 				TacticalDice.reset();
 			}
 			TurnOrder.reset();
@@ -2087,6 +2188,141 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	}
 
+	class Config {
+
+		static applyDefaults() {
+			Config._stateVar = Config.DEFAULT;
+		}
+
+		static initializeStateVars() {
+			if (!Config._stateVar) {
+				this.applyDefaults();
+			}
+		}
+
+		static set(property, value) {
+
+			const propertyInfo = Config._getProperty(Config.INFO, property);
+			if (!(propertyInfo instanceof PropertyInfo)) {
+				return Result.createError('The given property (' + property + ') does not exist.');
+			}
+
+			const validator = propertyInfo.validator;
+
+			if (!validator(value)) {
+				return Result.createError('The value given (' + value + ') is not valid. Allowed values: ' + propertyInfo.allowedValues);
+			}
+
+			const converter = propertyInfo.converter;
+			const converted = converter(value);
+
+			Config._setProperty(Config._stateVar, property, converted);
+
+			return Result.create();
+		}
+
+		static getInfo(property) {
+			const propertyInfo = Config._getProperty(Config.INFO, property);
+			return propertyInfo instanceof PropertyInfo ? propertyInfo : undefined;
+		}
+
+		static _getProperty(object, propertyName) {
+			return propertyName.split('.').reduce((acc, part) => acc && acc[part], object);
+		}
+
+		static _setProperty(object, propertyName, value) {
+			const parts = propertyName.split('.');
+			if (parts.length === 1) {
+				object[propertyName] = value;
+			} else {
+				const withoutLast = parts.slice(0, parts.length - 1).join('.');
+				const lastObj = Config._getProperty(object, withoutLast);
+				if (typeof lastObj === 'object') {
+					const lastPropertyName = parts[parts.length - 1];
+					lastObj[lastPropertyName] = value;
+				}
+			}
+		}
+
+		static get() {
+			return Config._stateVar;
+		}
+
+		static get _stateVar() {
+			return state.PopcornInitiative.config;
+		}
+
+		static set _stateVar(value) {
+			state.PopcornInitiative.config = value;
+		}
+
+		static _getInfo() {
+			const booleanValidator = (value) => {
+				return value === 'true' || value === 'false';
+			};
+			const diceValidator = (value) => {
+				return value && /^d\d+$/.test(value);
+			};
+			const colorValidator = (value) => {
+				return value && /^#([0-9A-Fa-f]{3}){1,2}$/.test(value);
+			};
+			const positiveIntegerValidator = (value) => {
+				return !isNaN(value) && Number.isInteger(Number(value));
+			};
+
+			const booleanConverter = (value) => {
+				return value === 'true';
+			};
+
+			const allowedBoolean = 'true or false';
+			const allowedPositiveInteger = 'positive integers';
+			const allowedColor = 'something like #158ADF';
+			const allowedDie = 'd4, d20, d100 etc.';
+
+			return {
+				groupEnemies: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean, 'If true, groups enemies together in a single ' +
+					'entity instead of allowing players to see all enemies. If you set this to false, since players have to explicitly give the ' +
+					'turn over to something, there will be no hidden enemies (i.e. if you have a token on the GM layer, normally it would be ' +
+					'hidden in the turnorder. This is not possible with PopcornInitiative.)'),
+				tacticalDice: {
+					enabled: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean, 'Enables or disables tactical dice. Tactical ' +
+						'dice are awarded to the opposite team if the current team chains too many turns together. How tactical dice can be used ' +
+						'is up to the DM, generally you can use tactical dice like bardic inspiration.'),
+					persist: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean, 'If true, saves tactical dice values for the ' +
+						'teams between combats. If false, every new combat will reset the tactical dice.'),
+					maxConsecutiveTurns: new PropertyInfo(positiveIntegerValidator, parseInt, allowedPositiveInteger, 'The maximum number of turns ' +
+						'a team is allowed to take until tactical dice are awarded to the opposition.'),
+					teamSizeAdjustment: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean, 'If true, adjusts the maximum ' +
+						'consecutive turns for the larger team. An example: if there are 4 players and the maximum amount of consecutive turns is ' +
+						'2, then technically 50% of the players are allowed to act in succession. Without this being set to true, if there were ' +
+						'20 enemies, still only 2 could act at a time. This would mean a combat of "2 enemies -> 2 players -> 2 enemies -> 2 ' +
+						'players and then 16 enemies in a row". But if teamSizeAdjustment is enabled, the maximum number of consecutive turns for ' +
+						'the enemies in this example would be raised to 10, so the combat would looke like this: "10 enemies -> 2 players -> 10 ' +
+						'enemies -> 2 players."'),
+					die: new PropertyInfo(diceValidator, _.identity, allowedDie, 'The value of the tactical dice.'),
+					amountIncreasingPerTurn: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean, 'If false, the opposite team will' +
+						' get one tactical die for every time it is over the turn limit. With this set to true, however, each turn over the turn ' +
+						'limit would give the following amounts to the opposite team: 1, 2, 3, 4, ...')
+				},
+				colors: {
+					players: new PropertyInfo(colorValidator, _.identity, allowedColor, 'The color the player team will have in chat. Don\'t set it' +
+						' to something light or the contrast will be terrible.'),
+					enemies: new PropertyInfo(colorValidator, _.identity, allowedColor, 'The color the enemy team will have in chat. Don\'t set it ' +
+						'to something light or the contrast will be terrible.')
+				}
+			};
+		}
+	}
+
+	class PropertyInfo {
+		constructor(validator, converter, allowedValues, description) {
+			this.validator = validator;
+			this.converter = converter;
+			this.allowedValues = allowedValues;
+			this.description = description;
+		}
+	}
+
 	class ReportingPromise extends Promise {
 		constructor(executor, funcName, playerID) {
 			const wrappedExecutor = (resolve, reject) => {
@@ -2114,31 +2350,32 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		Initiative.ENEMY_TEAM_PARTICIPANT =
 			new Participant(Initiative.ENEMY_TEAM, Util.capitalizeFirstLetter(Initiative.ENEMY_TEAM), undefined, Initiative.ENEMY_TEAM, 0, []);
 
+		Config.DEFAULT = {
+			// In normal initiative, enemies on the GM layer are not shown to the players.
+			// However, this can not be implemented in popcorn initiative: what happens when it's a player's turn and there are only hidden enemies
+			// left? The only real solution is for the DM to only add tokens to initiative when they should be shown to the players, disabling the
+			// possibility for hidden tokens, which is how it's implemented.
+			groupEnemies: true,
+			tacticalDice: {
+				enabled: true,
+				persist: true,
+				maxConsecutiveTurns: 2,
+				teamSizeAdjustment: true,
+				die: 'd6',
+				amountIncreasingPerTurn: true
+			},
+			colors: {
+				players: '#117412',
+				enemies: '#a12313'
+			}
+		};
+		Config.INFO = Config._getInfo();
+
 		Initiative.DEBUG = true;
 		Messages.DEBUG_LOG = false;
 	}
 
 	createConstants();
-
-	let config = {
-		// In normal initiative, enemies on the GM layer are not shown to the players.
-		// However, this can not be implemented in popcorn initiative: what happens when it's a player's turn and there are only hidden enemies left?
-		// The only real solution is for the DM to only add tokens to initiative when they should be shown to the players, disabling the
-		// possibility for hidden tokens, which is how it's implemented.
-		groupEnemies: true,
-		tacticalDice: {
-			enabled: true,
-			persist: true,
-			maxConsecutiveTurns: 2,
-			teamSizeAdjustment: true,
-			die: 'd6',
-			amountIncreasingPerTurn: true
-		},
-		colors: {
-			players: '#117412',
-			enemies: '#a12313'
-		}
-	};
 
 	on("change:graphic:status_dead", CombatParticipants.tokenDeadHandler);
 
