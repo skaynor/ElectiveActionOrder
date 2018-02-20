@@ -29,8 +29,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static sendInfoParticipant(participant, message) {
-			let recipients = participant.playerIDs.slice();
-			if (recipients.length === 0 || (Initiative.DEBUG && recipients.indexOf(Messages.GAME_MASTERS) === -1)) {
+			let recipients = participant.playerIDs;
+			if (recipients.length === 0 || (Initiative.DEBUG && recipients.filter(playerIsGM).length !== Messages.GAME_MASTERS.length)) {
 				recipients = recipients.concat(Messages.GAME_MASTERS);
 			}
 
@@ -168,9 +168,9 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				},
 				'reset-config-to-default': () => {
 					addMessage('Resets the config back to default values.\n' +
-					'\n' +
-					'Usage:\n'+
-					'  ' + CommandLineInterface.COMMAND + ' reset-config-to-default');
+						'\n' +
+						'Usage:\n' +
+						'  ' + CommandLineInterface.COMMAND + ' reset-config-to-default');
 				},
 				'start': () => {
 					addMessage('Starts combat with the previously added participants (using "' + CommandLineInterface.COMMAND + ' add" or "' +
@@ -214,7 +214,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 						addMessage('Shows tactical dice status or uses a tactical die for your team.\n' +
 							'\n' +
 							'Usage:\n' +
-							'  ' + CommandLineInterface.COMMAND + ' [use]\n' +
+							'  ' + CommandLineInterface.COMMAND + ' tac [use]\n' +
 							'  \n' +
 							'no parameters: Shows the amount of tactical dice each team has.\n' +
 							'\n' +
@@ -301,6 +301,10 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		static postRaw(message) {
 			Messages._sendChat(message);
+		}
+
+		static postRawNoArchive(message) {
+			Messages._sendChat(message, null, { noarchive: true });
 		}
 
 		static sendInfo(playerID, message) {
@@ -549,7 +553,15 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			this.token = token;
 			this.team = team;
 			this.init = init;
-			this.playerIDs = playerIDs || [];
+			this._playerIDs = playerIDs || [];
+		}
+
+		get playerIDs() {
+			return this._playerIDs.slice();
+		}
+
+		set playerIDs(value) {
+			return this._playerIDs = value;
 		}
 
 		static fromObj(obj) {
@@ -852,6 +864,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 					resolve(Result.createError('Participant already added'));
 					return;
 				}
+				Util.debug('Roll ', participant.init);
 				Util.roll(participant.init).then(roll => {
 					participant.init = roll;
 					addFunc(participant);
@@ -865,7 +878,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 					Util.debug('addParticipant result: ', result);
 					resolve(result);
 				}).catch(reason => {
-					resolve(Result.createError('Error while rolling: ' + reason));
+					resolve(Result.createError('Error during initiative rolling (Roll: ' + participant.init + '): ' + reason));
 				});
 			}, 'CombatParticipants._add');
 		}
@@ -1247,10 +1260,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 					return;
 				}
 				TacticalDice.setDice(team, dice - 1);
-				Util.roll(1 + Config.get().tacticalDice.die).then(roll => {
+				const roll = 1 + Config.get().tacticalDice.die;
+				Util.roll(roll).then(roll => {
 					resolve(Result.create(roll));
 				}).catch(reason => {
-					resolve(Result.createError('Error while rolling: ' + reason));
+					resolve(Result.createError('Error while rolling tactical die (Roll: ' + roll + '): ' + reason));
 				});
 			}, 'TacticalDice.useDie(team)');
 		}
@@ -1398,6 +1412,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			const initiative = CommandLineInterface._isTeam(options[1]) ? options[2] : options[1];
 
 			Initiative.add(playerID, name, team, initiative);
+
 		}
 
 		static config(msg) {
@@ -2046,7 +2061,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				if (playerID) {
 					Messages.sendRaw(playerID, errorMessage);
 				} else {
-					Messages.postRaw(errorMessage);
+					Messages.postRawNoArchive(errorMessage);
 				}
 			}
 		}
@@ -2065,8 +2080,9 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 
 			const htmlBuilder = new HtmlBuilder('pre', message);
-
-			Messages.sendRaw('-L5DOgB6lPNKGooiSHet', htmlBuilder.toString());
+			Messages.GAME_MASTERS.forEach((playerID) => {
+				Messages.sendRaw(playerID, htmlBuilder.toString());
+			});
 		}
 
 		static getOtherTeam(team) {
@@ -2074,11 +2090,21 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static roll(query) {
-			return new ReportingPromise(resolve => {
-				sendChat(Messages.CHAT_NAME, '/r ' + query, msg => {
-					const rollResult = JSON.parse(msg[0].content);
-					resolve(rollResult.total);
-				});
+			return new Promise((resolve, reject) => {
+				try {
+					sendChat(Messages.CHAT_NAME, '[[' + query + ']]', msg => {
+						Util.debug('Rolling: ', msg);
+						const rollResult = msg[0].inlinerolls[0].results;
+						Util.debug('rollResult: ', rollResult);
+						resolve(rollResult.total);
+					});
+				} catch (e) {
+					if (e.name && e.message) {
+						reject(e.name + ': ' + e.message);
+					} else {
+						reject(e);
+					}
+				}
 			}, 'Util.roll(query)');
 		}
 
@@ -2156,7 +2182,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static add(playerID, name, team, initiative) {
-			CombatParticipants.addName(name, team, initiative);
+			const promise = CombatParticipants.addName(name, team, initiative);
+			promise.then(Initiative._getAddResultHandler(playerID, name));
 		}
 
 		static addSelection(playerID, tokens, team, initiative) {
@@ -2171,19 +2198,23 @@ var PopcornInitiative = PopcornInitiative || (function() {
 					return;
 				}
 				const token = tokenResult.val;
-				CombatParticipants.addToken(token, team, initiative).then(result => {
-					const participant = result.val;
-					if (result.hasErrors()) {
-						Messages.sendError(playerID, 'Could not add token ' + token.name, result.errors);
-					} else if (result.hasWarnings()) {
-						const content = 'Added ' + participant.name + ', initiative ' + participant.init;
-						Messages.sendWarning(playerID, content, result.warnings);
-					} else {
-						Messages.sendInfo(playerID, 'Added ' + participant.name + ' with initiative ' + participant.init +
-							' to team ' + participant.team + '.');
-					}
-				});
+				CombatParticipants.addToken(token, team, initiative).then(Initiative._getAddResultHandler(playerID, token.name));
 			});
+		}
+
+		static _getAddResultHandler(playerID, name) {
+			return (result) => {
+				const participant = result.val;
+				if (result.hasErrors()) {
+					Messages.sendError(playerID, 'Could not add token ' + name, result.errors);
+				} else if (result.hasWarnings()) {
+					const content = 'Added ' + participant.name + ', initiative ' + participant.init;
+					Messages.sendWarning(playerID, content, result.warnings);
+				} else {
+					Messages.sendInfo(playerID, 'Added ' + participant.name + ' with initiative ' + participant.init +
+						' to team ' + participant.team + '.');
+				}
+			};
 		}
 
 	}
@@ -2371,7 +2402,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		};
 		Config.INFO = Config._getInfo();
 
-		Initiative.DEBUG = true;
+		Initiative.DEBUG = false;
 		Messages.DEBUG_LOG = false;
 	}
 
