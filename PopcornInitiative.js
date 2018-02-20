@@ -114,7 +114,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		static _replaceWithGroupedEnemies(participantList) {
 			if (participantList.some(Participant.isEnemy)) {
-				participantList = participantList.filter(Participant.isPlayer);
+				participantList = participantList.filter(Participant.isFriendly);
 				participantList.push({
 					name: 'a bunch of enemies'
 				});
@@ -149,7 +149,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			yourTurn.append('span', participant.name, {
 				style: {
 					'font-weight': 'bold',
-					'color': '#117412'
+					'color': Messages._getTeamColor(participant.team)
 				}
 			});
 			yourTurn.append('span', '!');
@@ -162,7 +162,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				}
 			});
 
-			if (participant.isPlayer() && playerButtons.length > 0) {
+			if (participant.isFriendly() && playerButtons.length > 0) {
 				Messages._addTacDiceWarning(htmlBuilder, Initiative.PLAYER_TEAM);
 			}
 			htmlBuilder.append('div', playerButtons);
@@ -172,6 +172,10 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			htmlBuilder.append('div', enemyButtons);
 
 			Messages.sendInfoParticipant(participant, htmlBuilder.toString());
+		}
+
+		static _getTeamColor(team) {
+			return team === Initiative.PLAYER_TEAM ? config.colors.players : config.colors.enemies;
 		}
 
 		static _addTacDiceWarning(htmlBuilder, team) {
@@ -205,8 +209,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			return canGiveTurnTo.map(participant => {
 				Util.debug('Participant type: ', typeof participant);
 				Util.debug('Participant correct class? ', participant instanceof Participant);
-				const bgColor = participant.isEnemy() ? '#a12313' : '#117412';
-				return Messages._buildButton(participant.name, CommandLineInterface.COMMAND + ' giveturnAPI ' + participant.id, bgColor);
+				const bgColor = Messages._getTeamColor(participant.team);
+				return Messages._buildButton(participant.name, CommandLineInterface.COMMAND + ' giveTurnAPI ' + participant.id, bgColor);
 			});
 		}
 
@@ -277,12 +281,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 			Messages._appendHR(htmlBuilder);
 			const nowActing = htmlBuilder.append('div', 'Now acting: ');
-			const color = curParticipant.isEnemy() ? '#a12313' : '#117412';
 			nowActing.append('span', name, {
 				style: {
 					'font-size': '1.1em',
 					'font-weight': 'bold',
-					'color': color
+					'color': Messages._getTeamColor(curParticipant.team)
 				}
 			});
 			return htmlBuilder.toString();
@@ -323,7 +326,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	class Participant {
 
 		static fromObj(obj) {
-			return new Participant(obj.id, obj.name, obj.token, obj.init, obj.playerIDs);
+			return new Participant(obj.id, obj.name, obj.token, obj.team, obj.init, obj.playerIDs);
 		}
 
 		static toObj(participant) {
@@ -331,7 +334,15 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static isPlayer(participant) {
-			return _.negate(Participant.isEnemy)(participant);
+			return participant.isPlayer();
+		}
+
+		static isNPC(participant) {
+			return participant.isNPC();
+		}
+
+		static isFriendly(participant) {
+			return participant.isFriendly();
 		}
 
 		static isEnemy(participant) {
@@ -348,7 +359,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			list.splice(insertIndex, 0, participantObj);
 		}
 
-		constructor(id, name, token, init, playerIDs) {
+		constructor(id, name, token, team, init, playerIDs) {
 			if (!id) {
 				throw new Error('Participant created without ID!');
 			}
@@ -358,16 +369,25 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			this.id = id;
 			this.name = name;
 			this.token = token;
+			this.team = team;
 			this.init = init;
 			this.playerIDs = playerIDs || [];
 		}
 
-		isEnemy() {
+		isNPC() {
 			return this.playerIDs.length === 0;
 		}
 
 		isPlayer() {
-			return !this.isEnemy();
+			return this.playerIDs.length !== 0;
+		}
+
+		isFriendly() {
+			return this.team === Initiative.PLAYER_TEAM;
+		}
+
+		isEnemy() {
+			return this.team === Initiative.ENEMY_TEAM;
 		}
 
 		toObj() {
@@ -375,6 +395,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				id: this.id,
 				name: this.name,
 				token: this.token,
+				team: this.team,
 				init: this.init,
 				playerIDs: this.playerIDs
 			};
@@ -437,8 +458,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			return result;
 		}
 
-		static addName(name, initiative) {
-			return CombatParticipants._addAsEnemy(new Participant(name, name, undefined, initiative, []));
+		static addName(name, team, initiative) {
+			team = team ? team : Initiative.ENEMY_TEAM;
+			const participant = new Participant(name, name, undefined, team, initiative, []);
+			const addFunc = (team && team === Initiative.PLAYER_TEAM) ? CombatParticipants._addAsPlayer : CombatParticipants._addAsEnemy;
+			return addFunc(participant);
 		}
 
 		static addFromTurnOrder() {
@@ -455,13 +479,17 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			if (result.hasErrors()) {
 				return Promise.resolve(result);
 			} else {
-				return CombatParticipants.addToken(result.val, initiative);
+				return CombatParticipants.addToken(result.val, null, initiative);
 			}
 		}
 
-		static addToken(token, initiative) {
+		static addToken(token, team, initiative) {
 			let result = Result.create();
 			Util.debug('Adding token ', token);
+
+			if (!team) {
+				team = token.isPlayerControlled() ? Initiative.PLAYER_TEAM : Initiative.ENEMY_TEAM;
+			}
 
 			if (initiative === undefined) {
 				const clacInitResult = token.calcInitiative();
@@ -471,7 +499,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 			let playerIDs;
 			let addFunc;
-			if (token.isPlayerControlled()) {
+			if (team === Initiative.PLAYER_TEAM) {
 				playerIDs = token.getControllingPlayers();
 				addFunc = CombatParticipants._addAsPlayer;
 			} else {
@@ -479,7 +507,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				addFunc = CombatParticipants._addAsEnemy;
 			}
 			const id = token.id;
-			const addPromise = addFunc(new Participant(id, token.name, id, initiative, playerIDs));
+			const addPromise = addFunc(new Participant(id, token.name, id, team, initiative, playerIDs));
 
 			const addResults = addResult => {
 				Util.debug('Adding result from token add: ', addResult);
@@ -688,7 +716,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static _findToAct(team) {
-			const filterFunc = (team === Initiative.ENEMY_TEAM) ? Participant.isEnemy : Participant.isPlayer;
+			const filterFunc = (team === Initiative.ENEMY_TEAM) ? Participant.isEnemy : Participant.isFriendly;
 			return RoundInfo.findAllToAct().filter(filterFunc);
 		}
 
@@ -738,7 +766,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				Util.debug('New turn: ' + RoundInfo._curTurn);
 
 				if (config.tacticalDice.enabled) {
-					TacticalDice.addTurn(participant.isEnemy() ? Initiative.ENEMY_TEAM : Initiative.PLAYER_TEAM);
+					TacticalDice.addTurn(participant.team);
 				}
 
 				Messages.postTurnInfo();
@@ -804,7 +832,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 			return curParticipant &&
 				(
-					(playerIsGM(playerID) && (Initiative.DEBUG || curParticipant.isEnemy())) ||
+					(playerIsGM(playerID) && (Initiative.DEBUG || curParticipant.isNPC())) ||
 					(!playerIsGM(playerID) && curParticipant.playerIDs.includes(playerID))
 				);
 		}
@@ -969,7 +997,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		static _areMembersOfTheOtherTeamLeftInRound(team) {
 			const possibleSuccessors = RoundInfo.findCurrentPossibleSuccessors();
 			Util.debug('_areMembersOfTheOtherTeamLeftInRound possibleSuccessors', possibleSuccessors);
-			const isOfOtherTeam = (team === Initiative.ENEMY_TEAM) ? Participant.isPlayer : Participant.isEnemy;
+			const isOfOtherTeam = (team === Initiative.ENEMY_TEAM) ? Participant.isFriendly : Participant.isEnemy;
 			const membersOfOtherTeam = possibleSuccessors.filter(isOfOtherTeam);
 			Util.debug('_areMembersOfTheOtherTeamLeftInRound membersOfOtherTeam', membersOfOtherTeam);
 			return membersOfOtherTeam.length > 0;
@@ -1012,212 +1040,22 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		static create() {
 			CommandLineInterface._handlers = {
-				add: msg => {
-					const playerID = msg.playerid;
-					if (!playerIsGM(playerID)) {
-						// TODO error
-						return;
-					}
-
-					const tokens = Messages.getSelectedTokens(msg);
-					if (tokens.length === 0) {
-						Messages.sendError(playerID, 'No token selected!');
-						return;
-					}
-					const initiative = CommandLineInterface._getOption(msg, 0);
-					tokens.forEach(selectedToken => {
-						const tokenResult = Token.fromSelectionToken(selectedToken);
-						if (tokenResult.hasErrors()) {
-							Messages.sendError(playerID, 'Could not find token ' + selectedToken.id, tokenResult.errors);
-							return;
-						}
-						const token = tokenResult.val;
-						CombatParticipants.addToken(token, initiative).then(result => {
-							const participant = result.val;
-							if (result.hasErrors()) {
-								Messages.sendError(playerID, 'Could not add token ' + token.name, result.errors);
-							} else if (result.hasWarnings()) {
-								const content = 'Added ' + participant.name + ', initiative ' + participant.init;
-								Messages.sendWarning(playerID, content, result.warnings);
-							} else {
-								Messages.sendInfo(playerID, 'Added ' + participant.name + ' with initiative ' + participant.init + '.');
-							}
-						});
-					});
-				},
-				remove: msg => {
-					const playerID = msg.playerid;
-					if (!playerIsGM(playerID)) {
-						Messages.sendError(playerID, 'Only the GM can remove combat participants.');
-						return;
-					}
-
-					const id = CommandLineInterface._getOption(msg, 0);
-
-					if (id) {
-						CombatParticipants.removeByID(id);
-						// TODO errors
-					} else {
-						const tokens = Messages.getSelectedTokens(msg);
-						const selectionIDs = tokens.map(token => token.id);
-						selectionIDs.forEach(CombatParticipants.removeByTokenID);
-						// TODO errors
-					}
-
-				},
-				start: msg => {
-					const playerID = msg.playerid;
-					if (!playerIsGM(playerID)) {
-						Messages.sendError(playerID, 'Only the GM can start fights.');
-						return;
-					}
-
-					if (RoundInfo.isCombatRunning()) {
-						Messages.sendError(playerID, 'A combat is already going on.');
-						return;
-					}
-
-					const tokenPromises = CombatParticipants.addFromTurnOrder();
-					tokenPromises.forEach(promise => {
-						promise.then(result => {
-							Util.debug('Turnorder addTokenID result ', result);
-							if (result.hasErrors()) {
-								Messages.sendError(playerID, 'Could not add token', result.errors);
-							}
-							if (result.hasWarnings()) {
-								Messages.sendWarning(playerID, 'Warning(s) while adding token', result.warnings);
-							}
-						});
-					});
-
-					Promise.all(tokenPromises).then(() => {
-						if (CombatParticipants.findAll().length === 0) {
-							Messages.sendError(playerID, 'Trying to start combat with no participants!');
-							return;
-						}
-						Util.debug('Starting new combat...');
-						Util.debug('Participants: ', CombatParticipants._stateVar);
-
-						Initiative.startCombat();
-					});
-				},
-				stop: msg => {
-					const playerID = msg.playerid;
-					if (!playerIsGM(playerID)) {
-						Messages.sendError(playerID, 'Only the GM can stop fights.');
-						return;
-					}
-
-					if (!RoundInfo.isCombatRunning()) {
-						Messages.sendError(playerID, 'There is no fight going on.');
-						return;
-					}
-
-					Initiative.stopCombat();
-				},
-				giveturnAPI: msg => {
-					const playerID = msg.playerid;
-					if (!RoundInfo.isCombatRunning()) {
-						Util.debug('Player ', msg.who, ' tried to give turn over, but no combat is running.');
-						Messages.sendError(playerID, 'Can\'t give turn, no combat running!');
-						return;
-					}
-					if (!RoundInfo.isPlayersTurn(playerID)) {
-						Util.debug('Player ', msg.who, ' tried to give turn over, but it\'s not his turn.');
-						Messages.sendError(playerID, 'It\'s not your turn!');
-						return;
-					}
-					const id = CommandLineInterface._getOption(msg, 0);
-					let participant = (config.groupEnemies && id === Initiative.ENEMY_TEAM) ? Initiative.ENEMY_TEAM_PARTICIPANT :
-						CombatParticipants.findByID(id);
-					if (!participant) {
-						Messages.sendError(playerID, 'You tried to give turn to ', id, ' but a participant with that ID does not exist!');
-						return;
-					}
-					const result = RoundInfo.giveTurn(participant);
-					if (result.hasErrors()) {
-						Messages.sendError(playerID, 'Can not give turn to ' + participant.name, result.errors);
-					} else {
-						Messages.sendInfo(playerID, 'You successfully gave the turn to "' + participant.name + '".');
-					}
-				},
-				reset: msg => {
-					const playerID = msg.playerid;
-					if (!playerIsGM(playerID)) {
-						Messages.sendError(playerID, 'Only the GM can reset the popcorn initiative.');
-						return;
-					}
-					CombatParticipants.reset();
-					RoundInfo.reset();
-					TacticalDice.fullReset();
-					Messages.sendInfo(playerID, 'Popcorn initiative has been reset.');
-				},
-				status: msg => {
-					Util.debug('Participants:', state.PopcornInitiative.participantsVar);
-					Util.debug('RoundInfo:', state.PopcornInitiative.roundInfoVar);
-					Util.debug('TacDice:', state.PopcornInitiative.tacticalDiceVar);
-
-					const playerID = msg.playerid;
-					if (RoundInfo.isCombatRunning()) {
-						Messages.sendStatus(playerID);
-					} else {
-						Messages.sendInfo(playerID, 'No combat running.');
-
-						Messages.sendTacticalDiceStatus(playerID);
-
-						if (playerIsGM(playerID)) {
-							Messages.sendParticipantsStatus(playerID);
-						}
-					}
-				},
-				menu: msg => {
-					const playerID = msg.playerid;
-
-					if (!RoundInfo.isCombatRunning()) {
-						Messages.sendError(playerID, 'No combat running, there is nothing you can do right now.');
-					} else if (RoundInfo.isPlayersTurn(playerID)) {
-						Messages.sendCurrentChoice();
-					} else {
-						Messages.sendWarning(playerID, 'It\'s not your turn so there is no menu for you, but here\'s the current ' +
-							'status (next time use "' + CommandLineInterface.COMMAND + ' status"):');
-						Messages.sendStatus(playerID);
-					}
-				},
-				tac: msg => {
-					const playerID = msg.playerid;
-					if (!config.tacticalDice.enabled) {
-						Messages.sendError(playerID, 'Tactical dice are not enabled.');
-						return;
-					}
-
-					const option1 = CommandLineInterface._getOption(msg, 0);
-					switch (option1) {
-						case undefined:
-							Messages.sendTacticalDiceStatus(playerID);
-							break;
-						case 'use':
-							const team = playerIsGM(playerID) ? Initiative.ENEMY_TEAM : Initiative.PLAYER_TEAM;
-							TacticalDice.useDie(team).then(result => {
-								if (result.hasErrors()) {
-									Messages.sendError(playerID, 'Could not use tactical die.', result.errors);
-									return;
-								}
-								const roll = result.val;
-								const remaining = TacticalDice.getDice(team);
-								Messages.postInfo('"' + msg.who + '" used a tactical die for the ' + team +
-									' (' + remaining + ' remaining).\n\nRoll result (1' + config.tacticalDice.die + '): ' + roll);
-							});
-							break;
-						default:
-							Messages.sendError(playerID, 'Unrecognized option "' + option1 + '"');
-					}
-				}
+				add: CommandLineInterface.add,
+				addName: CommandLineInterface.addName,
+				remove: CommandLineInterface.remove,
+				start: CommandLineInterface.start,
+				stop: CommandLineInterface.stop,
+				giveTurnAPI: CommandLineInterface.giveTurn,
+				reset: CommandLineInterface.reset,
+				status: CommandLineInterface.status,
+				menu: CommandLineInterface.menu,
+				tac: CommandLineInterface.tacticalDice
 			};
 
 			on('chat:message', CommandLineInterface._messageHandler);
 		}
 
-		static _getOption(msg, idx) {
+		static getOption(msg, idx) {
 			let options = msg.content.split(' ');
 
 			// skip command + sub command
@@ -1230,7 +1068,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			return options[realIndex];
 		}
 
-		static _getRemainingOptions(msg, idx) {
+		static getRemainingOptions(msg, idx) {
 			const options = msg.content.split(' ');
 
 			// skip command + sub command
@@ -1241,6 +1079,10 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 
 			return options.slice(realIndex);
+		}
+
+		static getOptions(msg) {
+			return this.getRemainingOptions(msg, 0);
 		}
 
 		static _messageHandler(msg) {
@@ -1265,6 +1107,227 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 
 			Util.reportErrors(() => handler(msg), handlerName, msg.playerid);
+		}
+
+		static _isEnemyTeam(option) {
+			return option === 'e' || option === Initiative.ENEMY_TEAM;
+		}
+
+		static _isPlayerTeam(option) {
+			return option === 'p' || option === Initiative.PLAYER_TEAM;
+		}
+
+		static _isTeam(option) {
+			return this._isEnemyTeam(option) || this._isPlayerTeam(option);
+		}
+
+		static add(msg) {
+			const playerID = msg.playerid;
+			if (!playerIsGM(playerID)) {
+				Messages.sendError(playerID, 'Only the GM can add participants to initiative.');
+				return;
+			}
+
+			const options = CommandLineInterface.getOptions(msg);
+			if (CommandLineInterface._isTeam(options[0])) {
+				const initiative = options[1];
+				const team = CommandLineInterface._isPlayerTeam(options[0]) ? Initiative.PLAYER_TEAM : Initiative.ENEMY_TEAM;
+				Initiative.addSelection(playerID, Messages.getSelectedTokens(msg), team, initiative);
+			} else if (options.length < 2) {
+				Initiative.addSelection(playerID, Messages.getSelectedTokens(msg), null, options[0]);
+			} else {
+				const options = CommandLineInterface.getRemainingOptions(msg, 0).join(' ');
+				Messages.sendError(playerID, 'Unrecognized set of options for adding: "' + options +
+					'". Try "' + CommandLineInterface.COMMAND + ' help"');
+			}
+		}
+
+		static addName(msg) {
+			const playerID = msg.playerid;
+			if (!playerIsGM(playerID)) {
+				Messages.sendError(playerID, 'Only the GM can add participants to initiative.');
+				return;
+			}
+
+			const options = CommandLineInterface.getOptions(msg);
+			if (options.length === 0) {
+				Messages.sendError(playerID, 'No name given to add.');
+			}
+
+			const name = options[0];
+			const team = CommandLineInterface._isTeam(options[1]) ? options[1] : undefined;
+			const initiative = CommandLineInterface._isTeam(options[1]) ? options[2] : options[1];
+
+			Initiative.add(playerID, name, team, initiative);
+		}
+
+		static remove(msg) {
+			const playerID = msg.playerid;
+			if (!playerIsGM(playerID)) {
+				Messages.sendError(playerID, 'Only the GM can remove combat participants.');
+				return;
+			}
+
+			const id = CommandLineInterface.getOption(msg, 0);
+
+			if (id) {
+				CombatParticipants.removeByID(id);
+				// TODO errors
+			} else {
+				const tokens = Messages.getSelectedTokens(msg);
+				const selectionIDs = tokens.map(token => token.id);
+				selectionIDs.forEach(CombatParticipants.removeByTokenID);
+				// TODO errors
+			}
+
+		}
+
+		static start(msg) {
+			const playerID = msg.playerid;
+			if (!playerIsGM(playerID)) {
+				Messages.sendError(playerID, 'Only the GM can start fights.');
+				return;
+			}
+
+			if (RoundInfo.isCombatRunning()) {
+				Messages.sendError(playerID, 'A combat is already going on.');
+				return;
+			}
+
+			const tokenPromises = CombatParticipants.addFromTurnOrder();
+			tokenPromises.forEach(promise => {
+				promise.then(result => {
+					Util.debug('Turnorder addTokenID result ', result);
+					if (result.hasErrors()) {
+						Messages.sendError(playerID, 'Could not add token', result.errors);
+					}
+					if (result.hasWarnings()) {
+						Messages.sendWarning(playerID, 'Warning(s) while adding token', result.warnings);
+					}
+				});
+			});
+
+			Promise.all(tokenPromises).then(() => {
+				if (CombatParticipants.findAll().length === 0) {
+					Messages.sendError(playerID, 'Trying to start combat with no participants!');
+					return;
+				}
+				Util.debug('Starting new combat...');
+				Util.debug('Participants: ', CombatParticipants._stateVar);
+
+				Initiative.startCombat();
+			});
+		}
+		static stop(msg) {
+			const playerID = msg.playerid;
+			if (!playerIsGM(playerID)) {
+				Messages.sendError(playerID, 'Only the GM can stop fights.');
+				return;
+			}
+
+			if (!RoundInfo.isCombatRunning()) {
+				Messages.sendError(playerID, 'There is no fight going on.');
+				return;
+			}
+
+			Initiative.stopCombat();
+		}
+		static giveTurn(msg) {
+			const playerID = msg.playerid;
+			if (!RoundInfo.isCombatRunning()) {
+				Util.debug('Player ', msg.who, ' tried to give turn over, but no combat is running.');
+				Messages.sendError(playerID, 'Can\'t give turn, no combat running!');
+				return;
+			}
+			if (!RoundInfo.isPlayersTurn(playerID)) {
+				Util.debug('Player ', msg.who, ' tried to give turn over, but it\'s not his turn.');
+				Messages.sendError(playerID, 'It\'s not your turn!');
+				return;
+			}
+			const id = CommandLineInterface.getOption(msg, 0);
+			let participant = (config.groupEnemies && id === Initiative.ENEMY_TEAM) ? Initiative.ENEMY_TEAM_PARTICIPANT :
+				CombatParticipants.findByID(id);
+			if (!participant) {
+				Messages.sendError(playerID, 'You tried to give turn to ', id, ' but a participant with that ID does not exist!');
+				return;
+			}
+			const result = RoundInfo.giveTurn(participant);
+			if (result.hasErrors()) {
+				Messages.sendError(playerID, 'Can not give turn to ' + participant.name, result.errors);
+			} else {
+				Messages.sendInfo(playerID, 'You successfully gave the turn to "' + participant.name + '".');
+			}
+		}
+		static reset(msg) {
+			const playerID = msg.playerid;
+			if (!playerIsGM(playerID)) {
+				Messages.sendError(playerID, 'Only the GM can reset the popcorn initiative.');
+				return;
+			}
+			CombatParticipants.reset();
+			RoundInfo.reset();
+			TacticalDice.fullReset();
+			Messages.sendInfo(playerID, 'Popcorn initiative has been reset.');
+		}
+		static status(msg) {
+			Util.debug('Participants:', state.PopcornInitiative.participantsVar);
+			Util.debug('RoundInfo:', state.PopcornInitiative.roundInfoVar);
+			Util.debug('TacDice:', state.PopcornInitiative.tacticalDiceVar);
+
+			const playerID = msg.playerid;
+			if (RoundInfo.isCombatRunning()) {
+				Messages.sendStatus(playerID);
+			} else {
+				Messages.sendInfo(playerID, 'No combat running.');
+
+				Messages.sendTacticalDiceStatus(playerID);
+
+				if (playerIsGM(playerID)) {
+					Messages.sendParticipantsStatus(playerID);
+				}
+			}
+		}
+		static menu(msg) {
+			const playerID = msg.playerid;
+
+			if (!RoundInfo.isCombatRunning()) {
+				Messages.sendError(playerID, 'No combat running, there is nothing you can do right now.');
+			} else if (RoundInfo.isPlayersTurn(playerID)) {
+				Messages.sendCurrentChoice();
+			} else {
+				Messages.sendWarning(playerID, 'It\'s not your turn so there is no menu for you, but here\'s the current ' +
+					'status (next time use "' + CommandLineInterface.COMMAND + ' status"):');
+				Messages.sendStatus(playerID);
+			}
+		}
+		static tacticalDice(msg) {
+			const playerID = msg.playerid;
+			if (!config.tacticalDice.enabled) {
+				Messages.sendError(playerID, 'Tactical dice are not enabled.');
+				return;
+			}
+
+			const option1 = CommandLineInterface.getOption(msg, 0);
+			switch (option1) {
+				case undefined:
+					Messages.sendTacticalDiceStatus(playerID);
+					break;
+				case 'use':
+					const team = playerIsGM(playerID) ? Initiative.ENEMY_TEAM : Initiative.PLAYER_TEAM;
+					TacticalDice.useDie(team).then(result => {
+						if (result.hasErrors()) {
+							Messages.sendError(playerID, 'Could not use tactical die.', result.errors);
+							return;
+						}
+						const roll = result.val;
+						const remaining = TacticalDice.getDice(team);
+						Messages.postInfo('"' + msg.who + '" used a tactical die for the ' + team +
+							' (' + remaining + ' remaining).\n\nRoll result (1' + config.tacticalDice.die + '): ' + roll);
+					});
+					break;
+				default:
+					Messages.sendError(playerID, 'Unrecognized option "' + option1 + '"');
+			}
 		}
 	}
 
@@ -1367,7 +1430,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			if (config.groupEnemies) {
 				restTurnOrderEntries = TurnOrderSynchronizer._buildTurnOrderEntries(filterCurrent(CombatParticipants.findPlayers()));
 				Util.debug('Rest players: ', restTurnOrderEntries);
-				if (currentParticipant.isPlayer()) {
+				if (currentParticipant.isFriendly()) {
 					Util.debug('Add enemies');
 					restTurnOrderEntries.push(TurnOrderSynchronizer._buildEnemiesTurnOrderEntry());
 					Util.debug('Rest players: ', restTurnOrderEntries);
@@ -1497,8 +1560,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		isPlayerControlled() {
 			const playerIDs = this.getControllingPlayers();
-			const noGm = playerIDs.filter(_.negate(playerIsGM));
-			return noGm.length > 0;
+			return playerIDs.length > 0;
 		}
 
 		getControllingPlayers() {
@@ -1511,7 +1573,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			if (!controlledby) {
 				return [];
 			}
-			return controlledby.split(',');
+
+			return controlledby.split(',').filter(_.negate(playerIsGM));
 		}
 	}
 
@@ -1712,6 +1775,37 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			TurnOrder.hide();
 		}
 
+		static add(playerID, name, team, initiative) {
+			CombatParticipants.addName(name, team, initiative);
+		}
+
+		static addSelection(playerID, tokens, team, initiative) {
+			if (tokens.length === 0) {
+				Messages.sendError(playerID, 'No token selected!');
+				return;
+			}
+			tokens.forEach(selectedToken => {
+				const tokenResult = Token.fromSelectionToken(selectedToken);
+				if (tokenResult.hasErrors()) {
+					Messages.sendError(playerID, 'Could not find token ' + selectedToken.id, tokenResult.errors);
+					return;
+				}
+				const token = tokenResult.val;
+				CombatParticipants.addToken(token, team, initiative).then(result => {
+					const participant = result.val;
+					if (result.hasErrors()) {
+						Messages.sendError(playerID, 'Could not add token ' + token.name, result.errors);
+					} else if (result.hasWarnings()) {
+						const content = 'Added ' + participant.name + ', initiative ' + participant.init;
+						Messages.sendWarning(playerID, content, result.warnings);
+					} else {
+						Messages.sendInfo(playerID, 'Added ' + participant.name + ' with initiative ' + participant.init +
+							' to team ' + participant.team + '.');
+					}
+				});
+			});
+		}
+
 	}
 
 	class ReportingPromise extends Promise {
@@ -1739,7 +1833,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		Initiative.PLAYER_TEAM = 'players';
 		Initiative.ENEMY_TEAM = 'enemies';
 		Initiative.ENEMY_TEAM_PARTICIPANT =
-			new Participant(Initiative.ENEMY_TEAM, Util.capitalizeFirstLetter(Initiative.ENEMY_TEAM), undefined, 0, []);
+			new Participant(Initiative.ENEMY_TEAM, Util.capitalizeFirstLetter(Initiative.ENEMY_TEAM), undefined, Initiative.ENEMY_TEAM, 0, []);
 
 		Initiative.DEBUG = true;
 		Messages.DEBUG_LOG = false;
@@ -1761,6 +1855,10 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			die: 'd6',
 			amountIncreasingPerTurn: true
 		},
+		colors: {
+			players: '#117412',
+			enemies: '#a12313'
+		}
 	};
 
 	on("change:graphic:status_dead", CombatParticipants.tokenDeadHandler);
