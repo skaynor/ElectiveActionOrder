@@ -295,6 +295,10 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			Messages.sendInfo(playerID, Messages._getTacticalDiceInfo());
 		}
 
+		static postTacticalDiceStatus() {
+			Messages.postInfo(Messages._getTacticalDiceInfo());
+		}
+
 		static _getTacticalDiceInfo() {
 			const htmlBuilder = new HtmlBuilder();
 			const heading = htmlBuilder.append('p', 'Tactical dice', {
@@ -919,8 +923,8 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static _resetDice() {
-			TacticalDice._setDice(Initiative.ENEMY_TEAM, 0);
-			TacticalDice._setDice(Initiative.PLAYER_TEAM, 0);
+			TacticalDice.setDice(Initiative.ENEMY_TEAM, 0);
+			TacticalDice.setDice(Initiative.PLAYER_TEAM, 0);
 		}
 
 		static fullReset() {
@@ -932,22 +936,22 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			return TacticalDice._stateVar[team] + config.tacticalDice.die;
 		}
 
-		static _getDice(team) {
+		static getDiceAmount(team) {
 			return TacticalDice._stateVar[team];
 		}
 
-		static _setDice(team, count) {
+		static setDice(team, count) {
 			TacticalDice._stateVar[team] = count;
 		}
 
-		static _addDice(team, count) {
+		static addDice(team, count) {
 			TacticalDice._stateVar[team] += count;
 		}
 
 		static addTurn(team) {
 			if (team === TacticalDice._lastTeam) {
 				if (TacticalDice.wouldGiveTacDice(team)) {
-					TacticalDice._addDice(Util.getOtherTeam(team), TacticalDice._wouldGiveTacDiceAmount(team));
+					TacticalDice.addDice(Util.getOtherTeam(team), TacticalDice._wouldGiveTacDiceAmount(team));
 				}
 				TacticalDice._consecutiveTurns++;
 			} else {
@@ -1021,12 +1025,12 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 		static useDie(team) {
 			return new ReportingPromise(resolve => {
-				const dice = TacticalDice._getDice(team);
+				const dice = TacticalDice.getDiceAmount(team);
 				if (dice === 0) {
 					resolve(Result.createError('The ' + team + ' do not currently have any tactical dice.'));
 					return;
 				}
-				TacticalDice._setDice(team, dice - 1);
+				TacticalDice.setDice(team, dice - 1);
 				Util.roll(1 + config.tacticalDice.die).then(roll => {
 					resolve(Result.create(roll));
 				}).catch(reason => {
@@ -1131,7 +1135,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			const options = CommandLineInterface.getOptions(msg);
 			if (CommandLineInterface._isTeam(options[0])) {
 				const initiative = options[1];
-				const team = CommandLineInterface._isPlayerTeam(options[0]) ? Initiative.PLAYER_TEAM : Initiative.ENEMY_TEAM;
+				const team = CommandLineInterface._getTeam(options[0]);
 				Initiative.addSelection(playerID, Messages.getSelectedTokens(msg), team, initiative);
 			} else if (options.length < 2) {
 				Initiative.addSelection(playerID, Messages.getSelectedTokens(msg), null, options[0]);
@@ -1155,7 +1159,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			}
 
 			const name = options[0];
-			const team = CommandLineInterface._isTeam(options[1]) ? options[1] : undefined;
+			const team = CommandLineInterface._getTeam(options[1]);
 			const initiative = CommandLineInterface._isTeam(options[1]) ? options[2] : options[1];
 
 			Initiative.add(playerID, name, team, initiative);
@@ -1218,6 +1222,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				Initiative.startCombat();
 			});
 		}
+
 		static stop(msg) {
 			const playerID = msg.playerid;
 			if (!playerIsGM(playerID)) {
@@ -1232,6 +1237,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 			Initiative.stopCombat();
 		}
+
 		static giveTurn(msg) {
 			const playerID = msg.playerid;
 			if (!RoundInfo.isCombatRunning()) {
@@ -1258,6 +1264,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				Messages.sendInfo(playerID, 'You successfully gave the turn to "' + participant.name + '".');
 			}
 		}
+
 		static reset(msg) {
 			const playerID = msg.playerid;
 			if (!playerIsGM(playerID)) {
@@ -1269,6 +1276,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			TacticalDice.fullReset();
 			Messages.sendInfo(playerID, 'Popcorn initiative has been reset.');
 		}
+
 		static status(msg) {
 			Util.debug('Participants:', state.PopcornInitiative.participantsVar);
 			Util.debug('RoundInfo:', state.PopcornInitiative.roundInfoVar);
@@ -1287,6 +1295,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				}
 			}
 		}
+
 		static menu(msg) {
 			const playerID = msg.playerid;
 
@@ -1300,6 +1309,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				Messages.sendStatus(playerID);
 			}
 		}
+
 		static tacticalDice(msg) {
 			const playerID = msg.playerid;
 			if (!config.tacticalDice.enabled) {
@@ -1307,13 +1317,15 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				return;
 			}
 
-			const option1 = CommandLineInterface.getOption(msg, 0);
-			switch (option1) {
-				case undefined:
+			const handlers = {
+				undefined: () => {
 					Messages.sendTacticalDiceStatus(playerID);
-					break;
-				case 'use':
-					const team = playerIsGM(playerID) ? Initiative.ENEMY_TEAM : Initiative.PLAYER_TEAM;
+				},
+				'use': (options) => {
+					let team = CommandLineInterface._getTeam(options[0]);
+					if (!team) {
+						team = playerIsGM(playerID) ? Initiative.ENEMY_TEAM : Initiative.PLAYER_TEAM;
+					}
 					TacticalDice.useDie(team).then(result => {
 						if (result.hasErrors()) {
 							Messages.sendError(playerID, 'Could not use tactical die.', result.errors);
@@ -1324,10 +1336,91 @@ var PopcornInitiative = PopcornInitiative || (function() {
 						Messages.postInfo('"' + msg.who + '" used a tactical die for the ' + team +
 							' (' + remaining + ' remaining).\n\nRoll result (1' + config.tacticalDice.die + '): ' + roll);
 					});
-					break;
-				default:
-					Messages.sendError(playerID, 'Unrecognized option "' + option1 + '"');
+				},
+				'add': (options) => {
+					if (!playerIsGM(playerID)) {
+						Messages.sendError(playerID, 'Only the GM can add tactical dice!');
+						return;
+					}
+					const team = CommandLineInterface._getTeam(options[0]);
+					if (!team) {
+						Messages.sendError(playerID, 'The given option does not represent a valid team (enemies/players): ' + team);
+						return;
+					}
+
+					let amount = options[1] || 1;
+					if (isNaN(amount)) {
+						Messages.sendError(playerID, 'Can not add tactical dice to team ' + team +
+							', the given amount is not a number: "' + amount + '"!');
+						return;
+					}
+					amount = Number(amount);
+					if (!Number.isInteger(amount)) {
+						Messages.sendError(playerID, 'Can not add tactical dice to team ' + team +
+							', the given amount is not a whole number: "' + amount + '"!');
+						return;
+					} else if ((TacticalDice.getDiceAmount(team) + amount) < 0) {
+						Messages.sendInfo(playerID, 'The amount to add will set the tactical dice amount of team ' + team + ' to 0.');
+						amount = -TacticalDice.getDiceAmount(team);
+					}
+
+					TacticalDice.addDice(team, amount);
+					Messages.postInfo('Successfully added ' + amount + ' tactical dice to team ' + team + '.');
+					Messages.postTacticalDiceStatus();
+				},
+				'set': (options) => {
+					if (!playerIsGM(playerID)) {
+						Messages.sendError(playerID, 'Only the GM can set tactical dice!');
+						return;
+					}
+
+					const team = CommandLineInterface._getTeam(options[0]);
+					if (!team) {
+						Messages.sendError(playerID, 'The given option does not represent a valid team (enemies/players): ' + team);
+						return;
+					}
+
+					let amount = options[1];
+					if (amount === undefined) {
+						Messages.sendError(playerID, 'Could not find an amount to set tactical dice of team ' + team + ' to!');
+						return;
+					} else if (isNaN(amount)) {
+						Messages.sendError(playerID, 'Can not set the amount of tactical dice of team ' + team +
+							', the given amount is not a number: "' + amount + '"!');
+						return;
+					}
+					amount = Number(amount);
+					if (!Number.isInteger(amount)) {
+						Messages.sendError(playerID, 'Can not set the amount of tactical dice of team ' + team +
+							', the given amount is not a whole number: "' + amount + '"!');
+						return;
+					} else if (amount < 0) {
+						Messages.sendError(playerID, 'Can not set the amount of tactical dice of team ' + team + ' to something negative (' +
+							amount + ')!');
+						return;
+					}
+
+					TacticalDice.setDice(team, Math.round(amount));
+					Messages.postInfo('Successfully set the amount tactical dice of team ' + team + ' to ' + amount + '.');
+					Messages.postTacticalDiceStatus();
+				}
+			};
+
+			const options = CommandLineInterface.getOptions(msg);
+			const handleFunc = handlers[options[0]];
+			if (!handleFunc) {
+				Messages.sendError(playerID, 'Unrecognized option "' + options[0] + '"');
+			} else {
+				handleFunc(options.slice(1));
 			}
+		}
+
+		static _getTeam(option) {
+			if (!CommandLineInterface._isTeam(option)) {
+				return undefined;
+			}
+
+			return CommandLineInterface._isPlayerTeam(option) ? Initiative.PLAYER_TEAM : Initiative.ENEMY_TEAM;
 		}
 	}
 
