@@ -561,7 +561,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 		}
 
 		set playerIDs(value) {
-			return this._playerIDs = value;
+			this._playerIDs = value;
 		}
 
 		static fromObj(obj) {
@@ -772,14 +772,6 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			return CombatParticipants.remove(participant);
 		}
 
-		static removeByID(id) {
-			const toRemove = CombatParticipants.findAll().find(Participant.hasID(id));
-			if (!toRemove) {
-				return Result.createError('No participant with the given ID (' + id + ') exists.');
-			}
-			return CombatParticipants.remove(toRemove);
-		}
-
 		static removeByName(name) {
 			const toRemove = CombatParticipants.findAll().find(participant => participant.name === name);
 			if (!toRemove) {
@@ -848,10 +840,6 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 
 				CombatParticipants.remove(participant);
 			}, 'tokenDeadHandler');
-		}
-
-		static _countParticipants() {
-			return CombatParticipants._players.length + CombatParticipants._enemies.length;
 		}
 
 		static reset() {
@@ -1639,7 +1627,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			}
 
 			const handlers = {
-				undefined: () => {
+				'undefined': () => {
 					Messages.sendTacticalDiceStatus(playerID);
 				},
 				'use': (options) => {
@@ -2020,10 +2008,6 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			this._warnings = warnings;
 		}
 
-		static createMessage(errors, warnings) {
-			return new Result(undefined, errors, warnings);
-		}
-
 		static createError(error) {
 			return new Result(undefined, [error], []);
 		}
@@ -2240,6 +2224,14 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 
 	class Config {
 
+		static get _stateVar() {
+			return state.ElectiveActionOrder.config;
+		}
+
+		static set _stateVar(value) {
+			state.ElectiveActionOrder.config = value;
+		}
+
 		static applyDefaults() {
 			Config._stateVar = Config.DEFAULT;
 		}
@@ -2301,14 +2293,6 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 
 		static get() {
 			return Config._stateVar;
-		}
-
-		static get _stateVar() {
-			return state.ElectiveActionOrder.config;
-		}
-
-		static set _stateVar(value) {
-			state.ElectiveActionOrder.config = value;
 		}
 
 		static _getInfo() {
