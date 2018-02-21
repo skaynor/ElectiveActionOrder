@@ -98,7 +98,7 @@ Continue this cycle until all enemies are removed, or until you type `!eao stop`
 | help                    | `!eao [help]` | Show the help menu. |
 | menu                    | `!eao menu` | Shows you the current menu which allows you to choose the next one to give the turn to. Useful if there were many chat lines since the last menu was posted. |
 | remove                  | `!eao remove [name]`<br /><br />`[name]`: The name that should be removed from initiative. Must be enclosed in quotes (") if it contains spaces.<br />If it is empty, will remove the currently selected tokens on the board from initiative. | Removes the selected token or given name. |
-| reset-all-data          | `!eao reset-ll-data` | Resets the entirety of ElectiveActionOrders data. Everything will be lost, use with caution! |
+| reset-all-data          | `!eao reset-all-data` | Resets the entirety of ElectiveActionOrders data. Everything will be lost, use with caution! |
 | reset-config-to-default | `!eao reset-config-to-default` | Resets the config back to default values. |
 | start                   | `!eao start` | Starts combat with the previously added participants (using "!eao add" or "!eao add-name"). Will also automatically add any tokens that are currently in the roll20 turn tracker. |
 | status                  | `!eao status` | Prints the current status of ElectiveActionOrder. |
