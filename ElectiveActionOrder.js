@@ -2063,10 +2063,10 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 				const error = JSON.stringify(message);
 				const stacktrace = e instanceof Error ? e.stack : '';
 
-				const errorMessage = 'An unexpected error occured while running ElectiveActionOrder. Please send the contents ' +
-					'of the following box to https://app.roll20.net/users/2153524/timo . You can try "' + CommandLineInterface.COMMAND +
-					' reset" to reset all data. ' +
-					'I\'m sorry for any inconvenience caused :( <br/>' +
+				const errorMessage = 'An unexpected error occured while running ElectiveActionOrder. Please create a new issue here ' +
+					'https://gitlab.com/azzurite/ElectiveActionOrder/issues and add the contents of the following box to the description. ' +
+					'You can try "' + CommandLineInterface.COMMAND +
+					' reset" to reset all data. I\'m sorry for any inconvenience caused :( <br/>' +
 					'<pre>Error while executing "' + funcName + '": ' + error + '\nStacktrace: ' + stacktrace + '</pre>';
 				if (playerID) {
 					Messages.sendRaw(playerID, errorMessage);

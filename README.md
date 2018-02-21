@@ -102,3 +102,12 @@ Continue this cycle until all enemies are removed, or until you type `!eao stop`
 | status                  | `!eao status` | Prints the current status of ElectiveActionOrder. |
 | stop                    | `!eao stop` | Stops the combat and removes all participants. |
 | tac                     | `!eao tac [use / add / set] [team] [amount]`<br /><br />`no parameters`: Shows the amount of tactical dice each team has.<br /><br />`use`: Uses a single tactical die for the given team, or, if the team is empty, for the enemy team.<br /><br />`add`: Adds the given amount to the given teams tactical dice pool.<br /><br />`set`: Sets the amount of tactical dice the given team has.<br /><br />`[team]`: Can be either "e", "enemies" for the enemy team or "p", "players" for the player team.<br />If the team parameter is missing, the token will be added as player if the token represents a character that can be edited & controlled by a player in this game, or as an enemy otherwise.<br /><br />`[amount]`: Has to be a positive whole number. Can be negative for <add>. | Shows tactical dice status or uses, adds or sets tactical dice for a team. |
+
+
+## Problems / Feature requests
+
+If you come across bugs or want something improved or changed, create a new issue here: https://gitlab.com/azzurite/ElectiveActionOrder/issues
+
+## Contributing
+
+Just create a pull request. We will get it in.
