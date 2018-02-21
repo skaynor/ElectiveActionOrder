@@ -466,10 +466,16 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 		}
 
 		static sendTurnInfo(playerID) {
+			if (!RoundInfo.isCombatRunning()) {
+				return;
+			}
 			Messages.sendInfo(playerID, Messages._getTurnInfo());
 		}
 
 		static postTurnInfo() {
+			if (!RoundInfo.isCombatRunning()) {
+				return;
+			}
 			Messages.postInfo(Messages._getTurnInfo());
 		}
 
@@ -796,7 +802,9 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 
 			if (toRemoveID === currentID) {
 				const potentialParticipants = RoundInfo.areTurnsRemaining() ? RoundInfo.findAllToAct() : CombatParticipants.findAll();
+				Util.debug('Potential new participants: ', potentialParticipants);
 				const newCurrent = CombatParticipants.findParticipantWithHighestInit(potentialParticipants);
+				Util.debug('Potential new participant with highest init: ', newCurrent);
 				RoundInfo.setCurrentParticipant(newCurrent);
 
 				// Send turn info a bit later so the user gets his confirmation before
