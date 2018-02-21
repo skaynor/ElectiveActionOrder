@@ -209,7 +209,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 							'  \n' +
 							teamParam +
 							'\n' +
-							'[amount]: Has to be a positive whole number. Can be negative for &lt;add&gt;.');
+							'[amount]: Has to be a positive whole number for &lt;use&gt; and &lt;set&gt;, but can be negative for &lt;add&gt;.');
 					} else {
 						addMessage('Shows tactical dice status or uses a tactical die for your team.\n' +
 							'\n' +
@@ -426,10 +426,20 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 				if (typeof value === 'object') {
 					return Messages._toConfigTableRows(value, prepend + key + '.');
 				} else {
-					return '<tr><th style="text-align: left">' + prepend + key + '</th><td>' + value + '</td></tr>';
+					return '<tr><th style="text-align: left">' + Messages._buildLink(prepend + key, CommandLineInterface.COMMAND + ' config ' + prepend + key) +
+						'</a></th><td>' + value + '</td></tr>';
 				}
 			});
 			return configLines.join('');
+		}
+
+		static _buildLink(msg, link) {
+			return Messages._buildButton(msg, link, {
+				'color': '#4273e7',
+				'background-color': 'transparent',
+				'text-decoration': 'underline',
+				'padding': '0'
+			});
 		}
 
 		static sendPre(playerID, message) {
@@ -524,12 +534,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 					'font-weight': 'bold'
 				}
 			});
-			heading.append('span', ' (' + Messages._buildButton('Use one', CommandLineInterface.COMMAND + ' tac use', {
-				'color': '#4273e7',
-				'background-color': 'transparent',
-				'text-decoration': 'underline',
-				'padding': '0'
-			}) + ')');
+			heading.append('span', ' (' + Messages._buildLink('Use one', CommandLineInterface.COMMAND + ' tac use') + ')');
 			htmlBuilder.append('p', 'Players: ' + TacticalDice.getDice(Initiative.PLAYER_TEAM));
 			htmlBuilder.append('p', 'Enemies: ' + TacticalDice.getDice(Initiative.ENEMY_TEAM));
 			return htmlBuilder.toString();
@@ -1533,7 +1538,10 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 				Util.debug('Starting new combat...');
 				Util.debug('Participants: ', CombatParticipants._stateVar);
 
-				Initiative.startCombat();
+				const result = Initiative.startCombat();
+				if (result.hasErrors()) {
+					Messages.sendError(playerID, 'Could not start combat.', result.errors);
+				}
 			});
 		}
 
@@ -2151,6 +2159,13 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 		}
 
 		static startCombat() {
+			if (CombatParticipants.findEnemies().length === 0) {
+				return Result.createError('No enemies have been added to the combat!');
+			}
+			if (CombatParticipants.findPlayers().length === 0) {
+				return Result.createError('No players have been added to the combat!');
+			}
+
 			const players = CombatParticipants.findPlayers().map(player => player.name + ' (Init: ' + player.init + ')');
 			const playerMessage = 'Starting combat with ' + players.length + ' player' + ((players.length !== 1) ? 's' : '') + ': ' +
 				players.join(', ');
@@ -2176,6 +2191,8 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 				Messages.postInfo(highestInit.name + ' won initiative with a ' + highestInit.init + '!');
 			}
 			RoundInfo.giveTurn(highestInit);
+
+			return Result.create();
 		}
 
 		static stopCombat() {
@@ -2215,6 +2232,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 				const participant = result.val;
 				if (result.hasErrors()) {
 					Messages.sendError(playerID, 'Could not add token ' + name, result.errors);
+					Messages.sendHelp(playerID, 'add');
 					return;
 				}
 
