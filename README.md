@@ -74,8 +74,8 @@ Continue this cycle until all enemies are removed, or until you type `!eao stop`
 
 ## Config
 
-| Config property                      | description | default | allowed values |
-| ------------------------------------ | ----------- | ------- | -------------- | 
+| **Config property**                      | **Description** | **Default** | **Allowed values** |
+| ---------------------------------------- | --------------- | ----------- | ------------------ | 
 | **groupEnemies**                         | If true, groups enemies together in a single entity instead of allowing players to see all enemies. If you set this to false, since players have to explicitly give the turn over to something, there will be no hidden enemies (i.e. if you have a token on the GM layer, normally it would be hidden in the turnorder. This is not possible with ElectiveActionOrder.) | true | true or false |
 | **tacticalDice.enabled**                 | Enables or disables tactical dice. Tactical dice are awarded to the opposite team if the current team chains too many turns together. How tactical dice can be used is up to the DM, generally you can use tactical dice like bardic inspiration. | true | true or false |
 | **tacticalDice.persist**                 | If true, saves tactical dice values for the teams between combats. If false, every new combat will reset the tactical dice. | true | true or false |
@@ -90,8 +90,8 @@ Continue this cycle until all enemies are removed, or until you type `!eao stop`
 
 <> signifies required parameters, [] signifies optional ones.
 
-| Command                 | Usage | Description |
-| ----------------------- | ----- | ----------- |
+| **Command**             | **Usage** | **Description** |
+| ----------------------- | --------- | --------------- |
 | add                     | `!eao add [team] [initiative]`<br /><br />`[team]`: Can be either "e", "enemies" for the enemy team or "p", "players" for the player team.<br />If the team parameter is missing, the token will be added as player if the token represents a character that can be edited & controlled by a player in this game, or as an enemy otherwise.<br /><br />`[initiative]`: Can be any valid roll20 dice expression. Must be enclosed in quotes (") if it contains spaces.<br />If the initiative is missing, will attempt to read the initiative modifier of the character the token represents and roll 1d20+<init-modifier>, or fall back to using a single d20. | Adds the tokens that you have currently selected on the board to initiative. |
 | add-name                | `!eao add-name <name> [team] [initiative]`<br /><br />`<name>`: The name that should be added to initiative. Must be enclosed in quotes (") if it contains spaces.<br /><br />`[team]`: Can be either "e", "enemies" for the enemy team or "p", "players" for the player team.<br />If the team parameter is missing, the token will be added as player if the token represents a character that can be edited & controlled by a player in this game, or as an enemy otherwise.<br /><br />`[initiative]`: Can be any valid roll20 dice expression. Must be enclosed in quotes (") if it contains spaces.<br />If the initiative is missing, will attempt to read the initiative modifier of the character the token represents and roll 1d20+<init-modifier>, or fall back to using a single d20. | Adds a participant to initiative by name. |
 | config                  | `!eao config [property [value]]`<br /><br />`[property]`: Name of the config property, for example "tacticalDice.enabled".<br />If this and the value are left empty, prints all current config values.<br /><br />`[value]`: The value for the property.<br />If this is left empty, shows info about the config property and which values are accepted. | Shows the current config values or lets you set them. |
