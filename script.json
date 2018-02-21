@@ -1,0 +1,22 @@
+{
+    "name": "Popcorn Initiative",
+    "script": "PopcornInitiative.js",
+    "version": "1.0.0",
+    "previousversions": [],
+    "description": "TODO",
+    "authors": "Timo (Azzurite)",
+    "roll20userid": "2153524",
+    "useroptions": [],
+    "dependencies": ["HTML Builder"],
+    "modifies": {
+        "state.PopcornInitiative": "read, write",
+        "Campaign.turnorder": "read, write",
+        "graphic.status_dead": "read",
+        "graphic._id": "read",
+        "graphic.name": "read",
+        "graphic.represents": "read",
+        "character.controlledby": "read",
+        "attribute.current": "read"
+    },
+    "conflicts": []
+}

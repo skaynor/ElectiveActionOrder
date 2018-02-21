@@ -2150,7 +2150,6 @@ var PopcornInitiative = PopcornInitiative || (function() {
 
 	class Initiative {
 
-
 		static initializeStateVars() {
 			state.PopcornInitiative = state.PopcornInitiative || {};
 
@@ -2159,7 +2158,6 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			RoundInfo.initializeStateVars();
 			TacticalDice.initializeStateVars();
 		}
-
 
 		static startCombat() {
 			const players = CombatParticipants.findPlayers().map(player => player.name + ' (Init: ' + player.init + ')');
