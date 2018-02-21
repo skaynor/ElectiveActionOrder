@@ -808,17 +808,17 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 				RoundInfo.setCurrentParticipant(newCurrent);
 
 				// Send turn info a bit later so the user gets his confirmation before
-				setTimeout(() => {
+				setTimeout(Util.reportErrors.bind(null, () => {
 					Messages.postTurnInfo();
 					Messages.sendCurrentChoice();
-				}, 1);
+				}, 'CombatParticipants.remove setTimeout 1'), 1);
 			} else if (RoundInfo.hasToAct(participant) || RoundInfo.areAllTurnsDone()) {
 				RoundInfo.removeParticipantToActByID(toRemoveID);
 
 				// Send current choice a bit later so the user gets his confirmation before
-				setTimeout(() => {
+				setTimeout(Util.reportErrors.bind(null, () => {
 					Messages.sendCurrentChoice();
-				}, 1);
+				}, 'CombatParticipants.remove setTimeout 2'), 1);
 			}
 
 			if (CombatParticipants.findEnemies().length === 0 && RoundInfo.isCombatRunning()) {
@@ -873,9 +873,9 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 					if (RoundInfo.isCombatRunning()) {
 						RoundInfo.addParticipantToAct(participant);
 						// Send current choice a bit later so the player gets his confirmations before
-						setTimeout(() => {
+						setTimeout(Util.reportErrors.bind(null, () => {
 							Messages.sendCurrentChoice();
-						}, 1);
+						}, 'CombatParticipants._add timeout'), 1);
 						TurnOrderSynchronizer.sync();
 					}
 					Util.debug('Added participant: "', participant, '"');
@@ -981,10 +981,9 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			RoundInfo._toAct = [];
 		}
 
-		static startNewRound(playerID) {
+		static startNewRound() {
 			Util.debug('Starting new Round...');
 			RoundInfo._curRound++;
-			RoundInfo._curID = playerID;
 			Util.debug('New round: ' + RoundInfo._curRound);
 			RoundInfo._curTurn = -1;
 			RoundInfo._toAct = CombatParticipants.findAll();
@@ -1008,10 +1007,10 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 				}
 
 				// Delay sending of the messages so the player gets his confirmation of giving the turn before them
-				setTimeout(() => {
+				setTimeout(Util.reportErrors.bind(null, () => {
 					Messages.postTurnInfo();
 					Messages.sendCurrentChoice();
-				}, 1);
+				}, 'RoundInfo.giveTurn timeout'), 1);
 
 				TurnOrderSynchronizer.sync();
 			}
