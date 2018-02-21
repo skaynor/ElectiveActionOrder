@@ -128,7 +128,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 						addMessage('Shows the current config values or lets you set them.\n' +
 							'\n' +
 							'Usage:\n' +
-							'  !pci config [property [value]]\n' +
+							'  ' + CommandLineInterface.COMMAND + ' config [property [value]]\n' +
 							'  \n' +
 							'[property]: Name of the config property, for example "tacticalDice.enabled".\n' +
 							'If this and the value are left empty, prints all current config values.\n' +
@@ -138,7 +138,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 						addMessage('Shows the current config values.\n' +
 							'\n' +
 							'Usage:\n' +
-							'  !pci config [property]\n' +
+							'  ' + CommandLineInterface.COMMAND + ' config [property]\n' +
 							'  \n' +
 							'[property]: Shows information about the given property.\n' +
 							'If left empty, prints all current config values.');
@@ -2381,7 +2381,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 	}
 
 	function createConstants() {
-		CommandLineInterface.COMMAND = '!pci';
+		CommandLineInterface.COMMAND = '!eao';
 
 		Messages.CHAT_NAME = 'Initiative';
 		on('ready', () => Messages.GAME_MASTERS = Util.findGMsInGame());
