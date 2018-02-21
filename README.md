@@ -12,7 +12,9 @@ Currently, it is only designed to be used with Dungeons & Dragons 5e.
 
 In summary, it means that the one that has the current turn designates who should get the next turn.
 
-This is in contrast to many static systems, like in standard DnD, where one initiative value is rolled for each participant, the turns are ordered by this initiative value and after that always stay the same. 
+This is in contrast to many static systems, like in standard DnD, where one initiative value is rolled for each participant, the turns are ordered by this initiative value and after that always stay the same.
+
+In EAO, the first turn gets selected by normal initiative, but after that, it is not used anymore.
 
 ## Installation
 
