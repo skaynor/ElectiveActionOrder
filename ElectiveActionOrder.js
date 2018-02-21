@@ -1,4 +1,4 @@
-var PopcornInitiative = PopcornInitiative || (function() {
+var ElectiveActionOrder = ElectiveActionOrder || (function() {
 	'use strict';
 
 	class Messages {
@@ -161,7 +161,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 						'If it is empty, will remove the currently selected tokens on the board from initiative.');
 				},
 				'reset-all-data': () => {
-					addMessage('Resets the entirety of PopcornInitiatives data. Everything will be lost, use with caution!\n' +
+					addMessage('Resets the entirety of ElectiveActionOrders data. Everything will be lost, use with caution!\n' +
 						'\n' +
 						'Usage:\n' +
 						'  ' + CommandLineInterface.COMMAND + ' reset-all-data');
@@ -181,7 +181,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 						'  ' + CommandLineInterface.COMMAND + ' start');
 				},
 				'status': () => {
-					addMessage('Prints the current status of PopcornInitiative.\n' +
+					addMessage('Prints the current status of ElectiveActionOrder.\n' +
 						'\n' +
 						'Usage:\n' +
 						'  ' + CommandLineInterface.COMMAND + ' status');
@@ -232,7 +232,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 					addMessage('Unrecognized help option: ' + helpTarget + '\n\n');
 				}
 
-				addMessage('Popcorn Initiative\n' +
+				addMessage('Elective Action Order\n' +
 					'\n' +
 					'Usage:\n' +
 					'  ' + CommandLineInterface.COMMAND + ' &lt;command&gt; [further options]\n' +
@@ -654,11 +654,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static get _stateVar() {
-			return state.PopcornInitiative.participantsVar;
+			return state.ElectiveActionOrder.participantsVar;
 		}
 
 		static set _stateVar(val) {
-			state.PopcornInitiative.participantsVar = val;
+			state.ElectiveActionOrder.participantsVar = val;
 		}
 
 		static initializeStateVars() {
@@ -935,11 +935,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static get _stateVar() {
-			return state.PopcornInitiative.roundInfoVar;
+			return state.ElectiveActionOrder.roundInfoVar;
 		}
 
 		static set _stateVar(val) {
-			state.PopcornInitiative.roundInfoVar = val;
+			state.ElectiveActionOrder.roundInfoVar = val;
 		}
 
 		static initializeStateVars() {
@@ -1141,11 +1141,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static get _stateVar() {
-			return state.PopcornInitiative.tacticalDiceVar;
+			return state.ElectiveActionOrder.tacticalDiceVar;
 		}
 
 		static set _stateVar(val) {
-			state.PopcornInitiative.tacticalDiceVar = val;
+			state.ElectiveActionOrder.tacticalDiceVar = val;
 		}
 
 		static initializeStateVars() {
@@ -1595,13 +1595,13 @@ var PopcornInitiative = PopcornInitiative || (function() {
 			RoundInfo.reset();
 			TacticalDice.fullReset();
 			Config.applyDefaults();
-			Messages.sendInfo(playerID, 'Popcorn initiative has been reset.');
+			Messages.sendInfo(playerID, 'ElectiveActionOrder has been reset.');
 		}
 
 		static status(msg) {
-			Util.debug('Participants:', state.PopcornInitiative.participantsVar);
-			Util.debug('RoundInfo:', state.PopcornInitiative.roundInfoVar);
-			Util.debug('TacDice:', state.PopcornInitiative.tacticalDiceVar);
+			Util.debug('Participants:', state.ElectiveActionOrder.participantsVar);
+			Util.debug('RoundInfo:', state.ElectiveActionOrder.roundInfoVar);
+			Util.debug('TacDice:', state.ElectiveActionOrder.tacticalDiceVar);
 
 			const playerID = msg.playerid;
 			if (RoundInfo.isCombatRunning()) {
@@ -2072,7 +2072,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				const error = JSON.stringify(message);
 				const stacktrace = e instanceof Error ? e.stack : '';
 
-				const errorMessage = 'An unexpected error occured while running PopcornInitiative. Please send the contents ' +
+				const errorMessage = 'An unexpected error occured while running ElectiveActionOrder. Please send the contents ' +
 					'of the following box to https://app.roll20.net/users/2153524/timo . You can try "' + CommandLineInterface.COMMAND +
 					' reset" to reset all data. ' +
 					'I\'m sorry for any inconvenience caused :( <br/>' +
@@ -2151,7 +2151,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	class Initiative {
 
 		static initializeStateVars() {
-			state.PopcornInitiative = state.PopcornInitiative || {};
+			state.ElectiveActionOrder = state.ElectiveActionOrder || {};
 
 			Config.initializeStateVars();
 			CombatParticipants.initializeStateVars();
@@ -2304,11 +2304,11 @@ var PopcornInitiative = PopcornInitiative || (function() {
 		}
 
 		static get _stateVar() {
-			return state.PopcornInitiative.config;
+			return state.ElectiveActionOrder.config;
 		}
 
 		static set _stateVar(value) {
-			state.PopcornInitiative.config = value;
+			state.ElectiveActionOrder.config = value;
 		}
 
 		static _getInfo() {
@@ -2338,7 +2338,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 				groupEnemies: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean, 'If true, groups enemies together in a single ' +
 					'entity instead of allowing players to see all enemies. If you set this to false, since players have to explicitly give the ' +
 					'turn over to something, there will be no hidden enemies (i.e. if you have a token on the GM layer, normally it would be ' +
-					'hidden in the turnorder. This is not possible with PopcornInitiative.)'),
+					'hidden in the turnorder. This is not possible with ElectiveActionOrder.)'),
 				tacticalDice: {
 					enabled: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean, 'Enables or disables tactical dice. Tactical ' +
 						'dice are awarded to the opposite team if the current team chains too many turns together. How tactical dice can be used ' +
@@ -2442,7 +2442,7 @@ var PopcornInitiative = PopcornInitiative || (function() {
 	on("change:graphic:status_dead", CombatParticipants.tokenDeadHandler);
 
 	on('ready', () => {
-		log('PopcornInitiative loaded');
+		log('ElectiveActionOrder loaded');
 	});
 
 	return {
