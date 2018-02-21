@@ -14,7 +14,7 @@ In summary, it means that the one that has the current turn designates who shoul
 
 This is in contrast to many static systems, like in standard DnD, where one initiative value is rolled for each participant, the turns are ordered by this initiative value and after that always stay the same.
 
-In EAO, the first turn gets selected by normal initiative, but after that, it is not used anymore.
+In EAO, the first turn gets selected by the normal initiative value, but after that, it is not used anymore.
 
 ## Installation
 
