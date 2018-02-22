@@ -3,7 +3,11 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 
 	class Messages {
 		static sendRaw(playerID, msg) {
-			Messages._sendChatNoArchive('/w ' + Messages._getPlayerName(playerID) + ' ' + msg);
+			if (playerID === 'all') {
+				Messages.postRaw(msg);
+			} else {
+				Messages._sendChatNoArchive('/w ' + Messages._getPlayerName(playerID) + ' ' + msg);
+			}
 		}
 
 		static getSelection(msg) {
