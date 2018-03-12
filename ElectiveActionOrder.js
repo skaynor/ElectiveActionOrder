@@ -2456,7 +2456,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 
 	CommandLineInterface.create();
 
-	on("change:graphic:status_dead", CombatParticipants.tokenDeadHandler);
+	on("change:graphic", CombatParticipants.tokenDeadHandler);
 
 	on('ready', () => {
 		log('ElectiveActionOrder loaded');
