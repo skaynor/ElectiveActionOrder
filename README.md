@@ -75,7 +75,8 @@ Continue this cycle until all enemies are removed, or until you type `!eao stop`
 ## Config
 
 | **Config property**                      | **Description** | **Default** | **Allowed values** |
-| ---------------------------------------- | --------------- | ----------- | ------------------ | 
+| ---------------------------------------- | --------------- | ----------- | ------------------ |
+| **showAllMenusToGM**                     | If true, all next turn selection menus for the players will also be shown to the GM. | true | true or false | 
 | **groupEnemies**                         | If true, groups enemies together in a single entity instead of allowing players to see all enemies. If you set this to false, since players have to explicitly give the turn over to something, there will be no hidden enemies (i.e. if you have a token on the GM layer, normally it would be hidden in the turnorder. This is not possible with ElectiveActionOrder.) | true | true or false |
 | **tacticalDice.enabled**                 | Enables or disables tactical dice. Tactical dice are awarded to the opposite team if the current team chains too many turns together. How tactical dice can be used is up to the DM, generally you can use tactical dice like bardic inspiration. | true | true or false |
 | **tacticalDice.persist**                 | If true, saves tactical dice values for the teams between combats. If false, every new combat will reset the tactical dice. | true | true or false |
