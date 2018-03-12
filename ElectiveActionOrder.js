@@ -35,7 +35,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 		static sendInfoParticipant(participant, message) {
 			let recipients = participant.playerIDs;
 			if (recipients.length === 0 ||
-				(Config.get().showAllDialogsToGM && recipients.filter(playerIsGM).length !== Messages.GAME_MASTERS.length)) {
+				(Config.get().showAllMenusToGM && recipients.filter(playerIsGM).length !== Messages.GAME_MASTERS.length)) {
 				recipients = recipients.concat(Messages.GAME_MASTERS);
 			}
 
@@ -1083,7 +1083,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 
 			return curParticipant &&
 				(
-					(playerIsGM(playerID) && (Config.get().showAllDialogsToGM || curParticipant.isNPC())) ||
+					(playerIsGM(playerID) && (Config.get().showAllMenusToGM || curParticipant.isNPC())) ||
 					(!playerIsGM(playerID) && curParticipant.playerIDs.includes(playerID))
 				);
 		}
@@ -2350,7 +2350,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			const allowedDie = 'd4, d20, d100 etc.';
 
 			return {
-				showAllDialogsToGM: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean,
+				showAllMenusToGM: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean,
 					'If true, all selection dialogs for the players will also be shown to the GM.'),
 				groupEnemies: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean, 'If true, groups enemies together in a single ' +
 					'entity instead of allowing players to see all enemies. If you set this to false, since players have to explicitly give the ' +
@@ -2429,7 +2429,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			new Participant(Initiative.ENEMY_TEAM, Util.capitalizeFirstLetter(Initiative.ENEMY_TEAM), undefined, Initiative.ENEMY_TEAM, 0, []);
 
 		Config.DEFAULT = {
-			showAllDialogsToGM: false,
+			showAllMenusToGM: false,
 			groupEnemies: true,
 			tacticalDice: {
 				enabled: true,
