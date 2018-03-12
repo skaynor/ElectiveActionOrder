@@ -34,7 +34,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 
 		static sendInfoParticipant(participant, message) {
 			let recipients = participant.playerIDs;
-			if (recipients.length === 0 || (Initiative.DEBUG && recipients.filter(playerIsGM).length !== Messages.GAME_MASTERS.length)) {
+			if (recipients.length === 0 || (Config.get().showAllDialogsToGM && recipients.filter(playerIsGM).length !== Messages.GAME_MASTERS.length)) {
 				recipients = recipients.concat(Messages.GAME_MASTERS);
 			}
 
@@ -430,7 +430,8 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 				if (typeof value === 'object') {
 					return Messages._toConfigTableRows(value, prepend + key + '.');
 				} else {
-					return '<tr><th style="text-align: left">' + Messages._buildLink(prepend + key, CommandLineInterface.COMMAND + ' config ' + prepend + key) +
+					return '<tr><th style="text-align: left">' +
+						Messages._buildLink(prepend + key, CommandLineInterface.COMMAND + ' config ' + prepend + key) +
 						'</a></th><td>' + value + '</td></tr>';
 				}
 			});
@@ -1081,7 +1082,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 
 			return curParticipant &&
 				(
-					(playerIsGM(playerID) && (Initiative.DEBUG || curParticipant.isNPC())) ||
+					(playerIsGM(playerID) && (Config.get().showAllDialogsToGM || curParticipant.isNPC())) ||
 					(!playerIsGM(playerID) && curParticipant.playerIDs.includes(playerID))
 				);
 		}
@@ -2089,7 +2090,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 		}
 
 		static debug(...args) {
-			if (!Initiative.DEBUG || !Messages.DEBUG_LOG) {
+			if (!Messages.DEBUG_LOG) {
 				return;
 			}
 			// for roll20: $('#consolepanel').before('<button onclick=ace.edit("apiconsole").setValue("")>Clear</button>')
@@ -2348,6 +2349,8 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			const allowedDie = 'd4, d20, d100 etc.';
 
 			return {
+				showAllDialogsToGM: new PropertyInfo(booleanValidator, booleanConverter,
+					'If true, all selection dialogs for the players will also be shown to the GM.'),
 				groupEnemies: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean, 'If true, groups enemies together in a single ' +
 					'entity instead of allowing players to see all enemies. If you set this to false, since players have to explicitly give the ' +
 					'turn over to something, there will be no hidden enemies (i.e. if you have a token on the GM layer, normally it would be ' +
@@ -2425,6 +2428,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			new Participant(Initiative.ENEMY_TEAM, Util.capitalizeFirstLetter(Initiative.ENEMY_TEAM), undefined, Initiative.ENEMY_TEAM, 0, []);
 
 		Config.DEFAULT = {
+			showAllDialogsToGM: false,
 			groupEnemies: true,
 			tacticalDice: {
 				enabled: true,
@@ -2441,7 +2445,6 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 		};
 		Config.INFO = Config._getInfo();
 
-		Initiative.DEBUG = false;
 		Messages.DEBUG_LOG = false;
 	}
 
