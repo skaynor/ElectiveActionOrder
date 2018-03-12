@@ -34,7 +34,8 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 
 		static sendInfoParticipant(participant, message) {
 			let recipients = participant.playerIDs;
-			if (recipients.length === 0 || (Config.get().showAllDialogsToGM && recipients.filter(playerIsGM).length !== Messages.GAME_MASTERS.length)) {
+			if (recipients.length === 0 ||
+				(Config.get().showAllDialogsToGM && recipients.filter(playerIsGM).length !== Messages.GAME_MASTERS.length)) {
 				recipients = recipients.concat(Messages.GAME_MASTERS);
 			}
 
@@ -2349,7 +2350,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			const allowedDie = 'd4, d20, d100 etc.';
 
 			return {
-				showAllDialogsToGM: new PropertyInfo(booleanValidator, booleanConverter,
+				showAllDialogsToGM: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean,
 					'If true, all selection dialogs for the players will also be shown to the GM.'),
 				groupEnemies: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean, 'If true, groups enemies together in a single ' +
 					'entity instead of allowing players to see all enemies. If you set this to false, since players have to explicitly give the ' +
