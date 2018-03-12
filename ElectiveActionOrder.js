@@ -2351,7 +2351,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 
 			return {
 				showAllMenusToGM: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean,
-					'If true, all selection dialogs for the players will also be shown to the GM.'),
+					'If true, all next turn selection menus for the players will also be shown to the GM.'),
 				groupEnemies: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean, 'If true, groups enemies together in a single ' +
 					'entity instead of allowing players to see all enemies. If you set this to false, since players have to explicitly give the ' +
 					'turn over to something, there will be no hidden enemies (i.e. if you have a token on the GM layer, normally it would be ' +
