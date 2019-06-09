@@ -727,9 +727,9 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			}
 
 			if (initiative === undefined) {
-				const clacInitResult = token.calcInitiative();
-				result.addMessagesFrom(clacInitResult);
-				initiative = clacInitResult.val;
+				const calcInitResult = token.calcInitiative();
+				result.addMessagesFrom(calcInitResult);
+				initiative = calcInitResult.val;
 			}
 
 			let playerIDs;
@@ -2080,7 +2080,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 				const errorMessage = 'An unexpected error occured while running ElectiveActionOrder. Please create a new issue here ' +
 					'https://gitlab.com/azzurite/ElectiveActionOrder/issues and add the contents of the following box to the description. ' +
 					'You can try "' + CommandLineInterface.COMMAND +
-					' reset" to reset all data. I\'m sorry for any inconvenience caused :( <br/>' +
+					' reset-all-data" to reset all data. I\'m sorry for any inconvenience caused :( <br/>' +
 					'<pre>Error while executing "' + funcName + '": ' + error + '\nStacktrace: ' + stacktrace + '</pre>';
 				if (playerID) {
 					Messages.sendRaw(playerID, errorMessage);
