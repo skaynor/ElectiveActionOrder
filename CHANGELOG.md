@@ -1,5 +1,6 @@
-#v1.1.1
+#v1.1.2
 - Change default of config value "showAllMenusToGM" to `true`
+- Show error when adding a token without a nameplate
 
 #v1.1.0
 - Add config value "showAllMenusToGM" which shows all next turn selection menus for the players also to the GM

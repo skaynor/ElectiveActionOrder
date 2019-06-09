@@ -722,6 +722,12 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			let result = Result.create();
 			Util.debug('Adding token ', token);
 
+			if (!token.name) {
+				result.addError('The token has no name. ' +
+					'You wouldn\'t be able to identify it in the initiative.');
+				return Promise.resolve(result);
+			}
+
 			if (!team) {
 				team = token.isPlayerControlled() ? Initiative.PLAYER_TEAM : Initiative.ENEMY_TEAM;
 			}
