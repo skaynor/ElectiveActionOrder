@@ -2429,7 +2429,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			new Participant(Initiative.ENEMY_TEAM, Util.capitalizeFirstLetter(Initiative.ENEMY_TEAM), undefined, Initiative.ENEMY_TEAM, 0, []);
 
 		Config.DEFAULT = {
-			showAllMenusToGM: false,
+			showAllMenusToGM: true,
 			groupEnemies: true,
 			tacticalDice: {
 				enabled: true,

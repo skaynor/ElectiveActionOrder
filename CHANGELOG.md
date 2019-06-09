@@ -1,3 +1,6 @@
+#v1.1.1
+- Change default of config value "showAllMenusToGM" to `true`
+
 #v1.1.0
 - Add config value "showAllMenusToGM" which shows all next turn selection menus for the players also to the GM
 - Fix adding a X to a token not removing it from combat
