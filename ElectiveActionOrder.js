@@ -57,26 +57,33 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			if (extraMessages && extraMessages.length !== 0) {
 				msgBuilder.append('div', Util.capitalizeFirstLetter(type) + '(s):', {
 					style: {
-						'margin-top': '9px'
+						'margin-top': '9px',
+						'color': Messages.TEXT_COLOR
 					}
 				});
 				let ul = msgBuilder.append('ul.extras');
-				extraMessages.forEach(extra => ul.append('li', extra));
+				extraMessages.forEach(extra => ul.append('li', extra, {
+					style: {
+						'color': Messages.TEXT_COLOR
+					}
+				}));
 			}
 			msgBuilder.setCss({
 				'extras': {
 					'margin-bottom': '0',
-					'margin-top': '9px'
+					'margin-top': '9px',
+					'color': Messages.TEXT_COLOR
 				},
 				'message': {
 					'border-style': 'solid',
 					'border-width': '1px',
 					'border-radius': '6px',
-					'padding': '5px'
+					'padding': '5px',
+					'color': Messages.TEXT_COLOR
 				},
 				'info': {
 					'background-color': '#fff',
-					'border-color': '#000',
+					'border-color': '#555',
 				},
 				'error': {
 					'background-color': '#ffd6d6',
@@ -127,6 +134,19 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 						teamParam +
 						'\n' +
 						initParam);
+				},
+				'clear': () => {
+					addMessage('Removes participants from initiative without changing anything else - tactical dice, config and ' +
+						'everything else stay untouched.\n' +
+						'Can only be used while no combat is running. To end a running combat, use "' + CommandLineInterface.COMMAND +
+						' stop" instead.\n' +
+						'\n' +
+						'Usage:\n' +
+						'  ' + CommandLineInterface.COMMAND + ' clear [team]\n' +
+						'\n' +
+						'[team]: Can be either "e", "enemies" for the enemy team, "p", "players" for the player team, or "a", "all" for ' +
+						'both teams.\n' +
+						'If the team parameter is missing, only the enemy team is removed.');
 				},
 				'config': () => {
 					if (isGM) {
@@ -202,9 +222,15 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 						addMessage('Shows tactical dice status or uses, adds or sets tactical dice for a team.\n' +
 							'\n' +
 							'Usage:\n' +
-							'  ' + CommandLineInterface.COMMAND + ' tac [use|add|set] [team] [amount]\n' +
+							'  ' + CommandLineInterface.COMMAND + ' tac [use|add|set|clear|limit] [team] [amount]\n' +
 							'  \n' +
 							'no parameters: Shows the amount of tactical dice each team has.\n' +
+							'  \n' +
+							'clear: Sets the tactical dice of both teams to 0. Everything else (config, participants, consecutive turn ' +
+							'tracking) stays untouched.\n' +
+							'  \n' +
+							'limit: Shows how many turns in a row each team may currently take before tactical dice are awarded to the ' +
+							'opposition, and how many the acting team has taken so far.\n' +
 							'  \n' +
 							'use: Uses a single tactical die for the given team, or, if the team is empty, for the enemy team.\n' +
 							'  \n' +
@@ -219,9 +245,12 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 						addMessage('Shows tactical dice status or uses a tactical die for your team.\n' +
 							'\n' +
 							'Usage:\n' +
-							'  ' + CommandLineInterface.COMMAND + ' tac [use]\n' +
+							'  ' + CommandLineInterface.COMMAND + ' tac [use|limit]\n' +
 							'  \n' +
 							'no parameters: Shows the amount of tactical dice each team has.\n' +
+							'\n' +
+							'[limit]: Shows how many turns in a row each team may currently take before tactical dice are awarded to the ' +
+							'opposition, and how many the acting team has taken so far.\n' +
 							'\n' +
 							'[use]: Uses a single tactical die for the player team.');
 					}
@@ -247,7 +276,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 					'\n' +
 					'  ' +
 					(isGM ?
-						'add, add-name, config, help, menu, remove, reset-all-data, reset-config-to-default, start, status, stop, tac' :
+						'add, add-name, clear, config, help, menu, remove, reset-all-data, reset-config-to-default, start, status, stop, tac' :
 						'config, help, menu, status, tac') + '\n' +
 					'\n' +
 					'For further info, type "' + CommandLineInterface.COMMAND + ' help &lt;command&gt;"');
@@ -325,7 +354,8 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			const yourTurn = htmlBuilder.append('div', 'It\'s your turn, ', {
 				style: {
 					'font-weight': 'bold',
-					'font-size': '1.3em'
+					'font-size': '1.3em',
+					'color': Messages.TEXT_COLOR
 				}
 			});
 			yourTurn.append('span', participant.name, {
@@ -334,13 +364,18 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 					'color': Messages._getTeamColor(participant.team)
 				}
 			});
-			yourTurn.append('span', '!');
+			yourTurn.append('span', '!', {
+				style: {
+					'color': Messages.TEXT_COLOR
+				}
+			});
 			Messages._appendHR(htmlBuilder);
 
 			const giveTurnMessage = (RoundInfo.areAllTurnsDone() ? 'This is the last turn of the round! Start the new round with:' : 'Give turn to:');
 			htmlBuilder.append('div', giveTurnMessage, {
 				style: {
-					'margin': '9px 0'
+					'margin': '9px 0',
+					'color': Messages.TEXT_COLOR
 				}
 			});
 
@@ -368,7 +403,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 					' tactical dice!';
 				htmlBuilder.append('div', message, {
 					style: {
-						'color': '#F00',
+						'color': Messages.ALERT_COLOR,
 						'margin': '9px 0'
 					}
 				});
@@ -400,6 +435,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			if (typeof style === 'string') {
 				style = {
 					'background-color': style,
+					'color': Messages.BUTTON_TEXT_COLOR,
 					'font-weight': 'bold',
 					'border-radius': '6px',
 					'border-size': '0',
@@ -441,7 +477,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 
 		static _buildLink(msg, link) {
 			return Messages._buildButton(msg, link, {
-				'color': '#4273e7',
+				'color': Messages.LINK_COLOR,
 				'background-color': 'transparent',
 				'text-decoration': 'underline',
 				'padding': '0'
@@ -455,6 +491,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 					'padding': '5px',
 					'font-family': 'Menlo,Monaco,Courier New,monospace',
 					'background-color': '#f5f5f5',
+					'color': Messages.TEXT_COLOR,
 					'border': '1px solid #ccc',
 					'border-radius': '5px',
 					'white-space': 'pre-wrap',
@@ -507,6 +544,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 					'font-variant': 'small-caps',
 					'font-weight': 'bold',
 					'font-size': '1.3em',
+					'color': Messages.TEXT_COLOR
 				}
 			});
 			if (Config.get().tacticalDice.enabled) {
@@ -514,7 +552,11 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 				htmlBuilder.append('div', Messages._getTacticalDiceInfo());
 			}
 			Messages._appendHR(htmlBuilder);
-			const nowActing = htmlBuilder.append('div', 'Now acting: ');
+			const nowActing = htmlBuilder.append('div', 'Now acting: ', {
+				style: {
+					'color': Messages.TEXT_COLOR
+				}
+			});
 			nowActing.append('span', name, {
 				style: {
 					'font-size': '1.1em',
@@ -537,12 +579,89 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			const htmlBuilder = new HtmlBuilder();
 			const heading = htmlBuilder.append('p', 'Tactical dice', {
 				style: {
-					'font-weight': 'bold'
+					'font-weight': 'bold',
+					'color': Messages.TEXT_COLOR
 				}
 			});
-			heading.append('span', ' (' + Messages._buildLink('Use one', CommandLineInterface.COMMAND + ' tac use') + ')');
-			htmlBuilder.append('p', 'Players: ' + TacticalDice.getDice(Initiative.PLAYER_TEAM));
-			htmlBuilder.append('p', 'Enemies: ' + TacticalDice.getDice(Initiative.ENEMY_TEAM));
+			heading.append('span', ' (' + Messages._buildLink('Use one', CommandLineInterface.COMMAND + ' tac use') + ')', {
+				style: {
+					'color': Messages.TEXT_COLOR
+				}
+			});
+			htmlBuilder.append('p', 'Players: ' + TacticalDice.getDice(Initiative.PLAYER_TEAM), {
+				style: {
+					'color': Messages.TEXT_COLOR
+				}
+			});
+			htmlBuilder.append('p', 'Enemies: ' + TacticalDice.getDice(Initiative.ENEMY_TEAM), {
+				style: {
+					'color': Messages.TEXT_COLOR
+				}
+			});
+			return htmlBuilder.toString();
+		}
+
+		static sendConsecutiveTurnLimits(playerID) {
+			Messages.sendInfo(playerID, Messages._getConsecutiveTurnLimitInfo());
+		}
+
+		static _getConsecutiveTurnLimitInfo() {
+			const htmlBuilder = new HtmlBuilder();
+			htmlBuilder.append('p', 'Consecutive turn limits', {
+				style: {
+					'font-weight': 'bold',
+					'color': Messages.TEXT_COLOR
+				}
+			});
+
+			[Initiative.PLAYER_TEAM, Initiative.ENEMY_TEAM].forEach(team => {
+				const size = CombatParticipants.getByTeam(team).length;
+				const line = htmlBuilder.append('p', Util.capitalizeFirstLetter(team) + ': ', {
+					style: {
+						'color': Messages.TEXT_COLOR
+					}
+				});
+				line.append('span', TacticalDice.getMaxConsecutiveTurns(team) + ' in a row', {
+					style: {
+						'font-weight': 'bold',
+						'color': Messages._getTeamColor(team)
+					}
+				});
+				line.append('span', ' (' + size + ' member' + ((size !== 1) ? 's' : '') + ')', {
+					style: {
+						'color': Messages.TEXT_COLOR
+					}
+				});
+			});
+
+			if (!Config.get().tacticalDice.teamSizeAdjustment) {
+				htmlBuilder.append('p', 'Team size adjustment is disabled, so both teams are limited to ' +
+					Config.get().tacticalDice.maxConsecutiveTurns + ' regardless of their size.', {
+					style: {
+						'color': Messages.TEXT_COLOR
+					}
+				});
+			}
+
+			const lastTeam = TacticalDice.getLastTeam();
+			if (RoundInfo.isCombatRunning() && lastTeam) {
+				const taken = TacticalDice.getConsecutiveTurns();
+				htmlBuilder.append('p', 'The ' + lastTeam + ' have taken ' + taken + ' turn' + ((taken !== 1) ? 's' : '') +
+					' in a row so far.', {
+					style: {
+						'color': Messages.TEXT_COLOR
+					}
+				});
+				if (TacticalDice.wouldGiveTacDice(lastTeam)) {
+					htmlBuilder.append('p', 'Another turn for the ' + lastTeam + ' would give the ' + Util.getOtherTeam(lastTeam) + ' ' +
+						TacticalDice.wouldGiveTacDiceAmount(lastTeam) + ' tactical dice!', {
+						style: {
+							'color': Messages.ALERT_COLOR
+						}
+					});
+				}
+			}
+
 			return htmlBuilder.toString();
 		}
 
@@ -732,30 +851,33 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 				team = token.isPlayerControlled() ? Initiative.PLAYER_TEAM : Initiative.ENEMY_TEAM;
 			}
 
-			if (initiative === undefined) {
-				const calcInitResult = token.calcInitiative();
-				result.addMessagesFrom(calcInitResult);
-				initiative = calcInitResult.val;
-			}
+			const initiativePromise = (initiative === undefined) ?
+				token.calcInitiative().then(calcInitResult => {
+					result.addMessagesFrom(calcInitResult);
+					return calcInitResult.val;
+				}) :
+				Promise.resolve(initiative);
 
-			let playerIDs;
-			let addFunc;
-			if (team === Initiative.PLAYER_TEAM) {
-				playerIDs = token.getControllingPlayers();
-				addFunc = CombatParticipants._addAsPlayer;
-			} else {
-				playerIDs = [];
-				addFunc = CombatParticipants._addAsEnemy;
-			}
-			const id = token.id;
-			const addPromise = addFunc(new Participant(id, token.name, id, team, initiative, playerIDs));
+			return initiativePromise.then(initiative => {
+				let playerIDs;
+				let addFunc;
+				if (team === Initiative.PLAYER_TEAM) {
+					playerIDs = token.getControllingPlayers();
+					addFunc = CombatParticipants._addAsPlayer;
+				} else {
+					playerIDs = [];
+					addFunc = CombatParticipants._addAsEnemy;
+				}
+				const id = token.id;
+				const addPromise = addFunc(new Participant(id, token.name, id, team, initiative, playerIDs));
 
-			const addResults = addResult => {
-				Util.debug('Adding result from token add: ', addResult);
-				addResult.addMessagesFrom(result);
-				return addResult;
-			};
-			return addPromise.then(addResults, addResults);
+				const addResults = addResult => {
+					Util.debug('Adding result from token add: ', addResult);
+					addResult.addMessagesFrom(result);
+					return addResult;
+				};
+				return addPromise.then(addResults, addResults);
+			});
 		}
 
 		static _doesNPCWithTokenIDExist(tokenID) {
@@ -871,6 +993,27 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			CombatParticipants._players = [];
 			CombatParticipants._enemies = [];
 			CombatParticipants._npcTokens = {};
+		}
+
+		// Removes the participants of the given team, or of both teams if no team is given. Only touches the
+		// participant list, everything else (round info, tactical dice, config) is left alone.
+		static clear(team) {
+			const cleared = team ? CombatParticipants.getByTeam(team) : CombatParticipants.findAll();
+
+			if (team !== Initiative.ENEMY_TEAM) {
+				CombatParticipants._players = [];
+			}
+			if (team !== Initiative.PLAYER_TEAM) {
+				CombatParticipants._enemies = [];
+			}
+
+			cleared.forEach(participant => {
+				if (participant.token) {
+					delete CombatParticipants._npcTokens[participant.token];
+				}
+			});
+
+			return cleared;
 		}
 
 		static _add(addFunc, participant) {
@@ -1180,6 +1323,12 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			TacticalDice.setDice(Initiative.PLAYER_TEAM, 0);
 		}
 
+		// Sets the dice of both teams to 0 without touching anything else (consecutive turn tracking,
+		// participants, config).
+		static clearDice() {
+			TacticalDice._resetDice();
+		}
+
 		static fullReset() {
 			TacticalDice.reset();
 			TacticalDice._resetDice();
@@ -1232,6 +1381,18 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			return TacticalDice._consecutiveTurns >= TacticalDice._getMaxConsecutiveTurns(team);
 		}
 
+		static getMaxConsecutiveTurns(team) {
+			return TacticalDice._getMaxConsecutiveTurns(team);
+		}
+
+		static getConsecutiveTurns() {
+			return TacticalDice._consecutiveTurns;
+		}
+
+		static getLastTeam() {
+			return TacticalDice._lastTeam;
+		}
+
 		static _getMaxConsecutiveTurns(team) {
 			const configuredValue = Config.get().tacticalDice.maxConsecutiveTurns;
 
@@ -1239,14 +1400,13 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 				return configuredValue;
 			}
 
+			// Each team may chain a percentage of its own members, independently of the other team's size.
+			// maxConsecutiveTurns acts as a floor so that small teams can still take a reasonable amount of turns.
+			// Partial turns are rounded in the players' favour: up for the player team, down for the enemy team.
 			const teamSize = CombatParticipants.getByTeam(team).length;
-			const otherTeamSize = CombatParticipants.getByTeam(Util.getOtherTeam(team)).length;
-			let maxConsecutiveTurns;
-			if (otherTeamSize >= teamSize) {
-				maxConsecutiveTurns = configuredValue;
-			} else {
-				maxConsecutiveTurns = Math.floor(teamSize / otherTeamSize * configuredValue);
-			}
+			const percent = Config.get().tacticalDice.teamSizeAdjustmentPercent;
+			const round = (team === Initiative.PLAYER_TEAM) ? Math.ceil : Math.floor;
+			const maxConsecutiveTurns = Math.max(configuredValue, round(teamSize * percent / 100));
 			Util.debug('maxConsecutiveTurns for team ', team, ': ', maxConsecutiveTurns);
 			return maxConsecutiveTurns;
 		}
@@ -1300,6 +1460,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			CommandLineInterface._handlers = {
 				'add': CommandLineInterface.add,
 				'add-name': CommandLineInterface.addName,
+				'clear': CommandLineInterface.clear,
 				'config': CommandLineInterface.config,
 				'giveTurnAPI': CommandLineInterface.giveTurn,
 				'help': CommandLineInterface.help,
@@ -1392,6 +1553,10 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			return this._isEnemyTeam(option) || this._isPlayerTeam(option);
 		}
 
+		static _isAll(option) {
+			return option === 'a' || option === 'all';
+		}
+
 		static _getTeam(option) {
 			if (!CommandLineInterface._isTeam(option)) {
 				return undefined;
@@ -1439,6 +1604,44 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 
 			Initiative.add(playerID, name, team, initiative);
 
+		}
+
+		static clear(msg) {
+			const playerID = msg.playerid;
+			if (!playerIsGM(playerID)) {
+				Messages.sendError(playerID, 'Only the GM can clear participants.');
+				return;
+			}
+
+			if (RoundInfo.isCombatRunning()) {
+				Messages.sendError(playerID, 'A combat is currently going on. Use "' + CommandLineInterface.COMMAND +
+					' stop" to end it, or "' + CommandLineInterface.COMMAND + ' remove" to remove single participants.');
+				return;
+			}
+
+			const teamOption = CommandLineInterface._getOption(msg, 0);
+			let team;
+			if (teamOption === undefined) {
+				team = Initiative.ENEMY_TEAM;
+			} else if (CommandLineInterface._isAll(teamOption)) {
+				team = undefined; // both teams
+			} else {
+				team = CommandLineInterface._getTeam(teamOption);
+				if (!team) {
+					Messages.sendError(playerID, 'The given option does not represent a valid team (enemies/players) or "all": "' +
+						teamOption + '"');
+					return;
+				}
+			}
+
+			const cleared = CombatParticipants.clear(team);
+			if (cleared.length === 0) {
+				Messages.sendInfo(playerID, 'There are no participants' + (team ? ' on team ' + team : '') + ' to clear.');
+				return;
+			}
+
+			Messages.sendInfo(playerID, 'Removed ' + cleared.length + ' participant' + ((cleared.length !== 1) ? 's' : '') +
+				(team ? ' of team ' + team : '') + ' from initiative: "' + cleared.map(p => p.name).join('", "') + '"');
 		}
 
 		static config(msg) {
@@ -1657,6 +1860,12 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 				'undefined': () => {
 					Messages.sendTacticalDiceStatus(playerID);
 				},
+				'limit': () => {
+					Messages.sendConsecutiveTurnLimits(playerID);
+				},
+				'limits': () => {
+					Messages.sendConsecutiveTurnLimits(playerID);
+				},
 				'use': (options) => {
 					let team = CommandLineInterface._getTeam(options[0]);
 					if (!team) {
@@ -1739,6 +1948,16 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 					TacticalDice.setDice(team, Math.round(amount));
 					Messages.postInfo('Successfully set the amount tactical dice of team ' + team + ' to ' + amount + '.');
 					Messages.postTacticalDiceStatus();
+				},
+				'clear': () => {
+					if (!playerIsGM(playerID)) {
+						Messages.sendError(playerID, 'Only the GM can clear tactical dice!');
+						return;
+					}
+
+					TacticalDice.clearDice();
+					Messages.postInfo('Cleared the tactical dice of both teams.');
+					Messages.postTacticalDiceStatus();
 				}
 			};
 
@@ -1768,9 +1987,29 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 
 		static set(turnOrder) {
 			Util.debug('Setting turnorder:', turnOrder);
-			Campaign().set('turnorder', JSON.stringify(turnOrder, (key, value) => {
-				return (value instanceof TurnOrderToken) ? value.toObject() : value;
-			}));
+			// Every entry needs a "_pageid". Without it the turn tracker cannot resolve the token an entry
+			// refers to and silently drops the row, which leaves only the custom ("-1") entries visible.
+			const pageID = TurnOrder.findPageID();
+			const entries = turnOrder.map(entry => {
+				const obj = (entry instanceof TurnOrderToken) ? entry.toObject() : Object.assign({}, entry);
+				obj._pageid = pageID;
+				return obj;
+			});
+			Campaign().set('turnorder', JSON.stringify(entries));
+		}
+
+		// The turn order can only hold objects of a single page, and "initiativepage" has to name that same
+		// page. Prefer the page the participants' tokens are actually on, and fall back to the players' page.
+		static findPageID() {
+			const tokenPageIDs = CombatParticipants.findAll()
+				.filter(participant => participant.token)
+				.map(participant => {
+					const token = getObj('graphic', participant.token);
+					return token && token.get('_pageid');
+				})
+				.filter(pageID => pageID);
+
+			return tokenPageIDs.length ? tokenPageIDs[0] : Campaign().get('playerpageid');
 		}
 
 		static getTokens() {
@@ -1789,7 +2028,9 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 		}
 
 		static show() {
-			Campaign().set('initiativepage', true);
+			// Has to be the ID of the page the turn order belongs to - "true" opens the tracker but leaves it
+			// without a page, so entries that reference a token cannot be resolved.
+			Campaign().set('initiativepage', TurnOrder.findPageID());
 		}
 
 		static hide() {
@@ -1970,20 +2211,63 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 		}
 
 		calcInitiative() {
-			let result = Result.create();
-			let attrInitMod;
+			const result = Result.create();
 			const representedCharacter = this.represents;
 			if (!representedCharacter) {
 				result.addWarning('Token ' + this.name + ' represents no character and no initiative was given, using 1d20+0 as initiative.');
-			} else {
-				attrInitMod = getAttrByName(representedCharacter, 'initiative');
-				if (!attrInitMod) {
-					result.addWarning('Character for token exists, but initiative modifier missing, falling back to +0!');
-				}
+				result.val = 'd20+0';
+				return Promise.resolve(result);
 			}
-			const initMod = attrInitMod || '+0';
-			result.val = 'd20' + initMod;
-			return result;
+			return Token._getInitiativeModifier(representedCharacter).then(initMod => {
+				if (initMod === undefined) {
+					result.addWarning('Character for token exists, but the initiative modifier could not be read, falling back to +0! ' +
+						'(If you are using the "D&D 2024 by Roll20" sheet, make sure your game uses the "Experimental" API sandbox version and ' +
+						'that the 2024 sheet is the primary character sheet of the game.)');
+					initMod = 0;
+				}
+				result.val = 'd20' + (initMod < 0 ? '' : '+') + initMod;
+				return result;
+			});
+		}
+
+		// Legacy sheets (e.g. "D&D 5E by Roll20", the 5e 2014 sheet) store the initiative modifier as the regular
+		// attribute "initiative_bonus". Beacon sheets (e.g. "D&D 2024 by Roll20") have no regular attributes; their
+		// computed values are only reachable through the async getSheetItem API, which exists on the
+		// "Experimental" API sandbox only.
+		static async _getInitiativeModifier(characterID) {
+			let initMod = Token._tryGetAttr(characterID, 'initiative_bonus');
+			if (initMod === undefined) {
+				// pre-2014-sheet name, kept as a fallback for other/older sheets
+				initMod = Token._tryGetAttr(characterID, 'initiative');
+			}
+			if (initMod === undefined && typeof getSheetItem === 'function') {
+				initMod = await Token._tryGetSheetItem(characterID, 'initiative_bonus');
+			}
+			const parsed = parseFloat(initMod);
+			return isNaN(parsed) ? undefined : parsed;
+		}
+
+		static _tryGetAttr(characterID, name) {
+			try {
+				const value = getAttrByName(characterID, name);
+				return (value === undefined || value === null || value === '') ? undefined : value;
+			} catch (e) {
+				return undefined;
+			}
+		}
+
+		static _tryGetSheetItem(characterID, property) {
+			// Guard with a timeout: on sandbox versions where getSheetItem is defined but not functional,
+			// the returned promise may never settle.
+			const timeout = new Promise(resolve => setTimeout(() => resolve(undefined), Token.SHEET_ITEM_TIMEOUT_MS));
+			try {
+				return Promise.race([
+					Promise.resolve(getSheetItem(characterID, property)),
+					timeout
+				]).catch(() => undefined);
+			} catch (e) {
+				return Promise.resolve(undefined);
+			}
 		}
 
 		isPlayerControlled() {
@@ -2276,7 +2560,25 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 		static initializeStateVars() {
 			if (!Config._stateVar) {
 				this.applyDefaults();
+			} else {
+				// A config saved by an older version of the script is missing any properties added since then,
+				// which would otherwise be read as undefined.
+				Config._addMissingDefaults(Config._stateVar, Config.DEFAULT);
 			}
+		}
+
+		static _addMissingDefaults(config, defaults) {
+			Object.entries(defaults).forEach(([key, defaultValue]) => {
+				if (typeof defaultValue === 'object' && defaultValue !== null) {
+					if (typeof config[key] !== 'object' || config[key] === null) {
+						config[key] = {};
+					}
+					Config._addMissingDefaults(config[key], defaultValue);
+				} else if (config[key] === undefined) {
+					config[key] = defaultValue;
+				}
+			});
+			return config;
 		}
 
 		static set(property, value) {
@@ -2345,6 +2647,9 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			const positiveIntegerValidator = (value) => {
 				return !isNaN(value) && Number.isInteger(Number(value)) && Number(value) > 0;
 			};
+			const percentageValidator = (value) => {
+				return positiveIntegerValidator(value) && Number(value) <= 100;
+			};
 
 			const booleanConverter = (value) => {
 				return value === 'true';
@@ -2352,6 +2657,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 
 			const allowedBoolean = 'true or false';
 			const allowedPositiveInteger = 'positive integers';
+			const allowedPercentage = 'whole numbers from 1 to 100';
 			const allowedColor = 'something like #158ADF';
 			const allowedDie = 'd4, d20, d100 etc.';
 
@@ -2369,19 +2675,27 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 					persist: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean, 'If true, saves tactical dice values for the ' +
 						'teams between combats. If false, every new combat will reset the tactical dice.'),
 					maxConsecutiveTurns: new PropertyInfo(positiveIntegerValidator, parseInt, allowedPositiveInteger, 'The maximum number of turns ' +
-						'a team is allowed to take until tactical dice are awarded to the opposition.'),
-					teamSizeAdjustment: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean, 'If true, adjusts the maximum ' +
-						'consecutive turns for the larger team. An example: \n' +
+						'a team is allowed to take until tactical dice are awarded to the opposition. \n' +
+						'If teamSizeAdjustment is enabled, this is used as the minimum (floor) of the scaled value, so a team can always take at ' +
+						'least this many turns no matter how few members it has left.'),
+					teamSizeAdjustment: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean, 'If true, scales the maximum ' +
+						'consecutive turns of each team with the size of that team, using teamSizeAdjustmentPercent. \n' +
+						'Both teams are scaled independently of each other, and maxConsecutiveTurns is used as a floor. \n' +
+						'Partial turns are rounded in the players\' favour: up for the player team, down for the enemy team. \n' +
 						'\n' +
-						'if there are 4 players and the maximum amount of consecutive turns is 2, then technically 50% of the players are allowed ' +
-						'to act in succession. \n' +
-						'Without this being set to true, if there were 20 enemies, still only 2 could act at a time. \n' +
-						'This would mean a combat like this:\n' +
-						'"2 enemies -> 2 players -> 2 enemies -> 2 players and then 16 enemies in a row". \n' +
+						'An example with teamSizeAdjustmentPercent at 35 and maxConsecutiveTurns at 2: \n' +
+						'8 players and 20 enemies means 3 players (35% of 8 is 2.8, rounded up) or 7 enemies (35% of 20) may act in succession ' +
+						'before tactical dice are awarded to the opposition. \n' +
+						'If the enemies are reduced to 3, they may still take 2 turns in a row (35% of 3 would be 1, but maxConsecutiveTurns is 2). \n' +
 						'\n' +
-						'But if teamSizeAdjustment is enabled, the maximum number of consecutive turns for the enemies in this example would be ' +
-						'raised to 10, so the combat would looke like this: \n' +
-						'"10 enemies -> 2 players -> 10 enemies -> 2 players."'),
+						'Without this being enabled, both teams are always limited to maxConsecutiveTurns, no matter how large they are.'),
+					teamSizeAdjustmentPercent: new PropertyInfo(percentageValidator, parseInt, allowedPercentage, 'The percentage of its own ' +
+						'members a team may let act in succession before tactical dice are awarded to the opposition. \n' +
+						'Only used if teamSizeAdjustment is enabled. The result is rounded up for the player team and down for the enemy team, ' +
+						'and never goes below maxConsecutiveTurns. \n' +
+						'\n' +
+						'At 35, 9 players may chain 4 turns while 9 enemies may only chain 3, and 20 enemies may chain 7. Player teams of 5 or ' +
+						'less and enemy teams of 8 or less stay at maxConsecutiveTurns. Lower values make the teams alternate more often.'),
 					die: new PropertyInfo(diceValidator, _.identity, allowedDie, 'The value of the tactical dice.'),
 					amountIncreasingPerTurn: new PropertyInfo(booleanValidator, booleanConverter, allowedBoolean, 'If false, the opposite team will' +
 						' get one tactical die for every time it is over the turn limit. \n' +
@@ -2423,7 +2737,18 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 		CommandLineInterface.COMMAND = '!eao';
 
 		Messages.CHAT_NAME = 'Initiative';
+
+		// Roll20's dark mode recolours any text that does not have an explicit colour, but leaves explicitly
+		// styled backgrounds alone. Every element that renders text therefore has to pin its colour, or it ends
+		// up as light grey on our light boxes. The API cannot detect which theme a player uses, so these are
+		// chosen to be readable on both (all >= 4.5:1 against the backgrounds they are used on).
+		Messages.TEXT_COLOR = '#1a1a1a';
+		Messages.BUTTON_TEXT_COLOR = '#fff';
+		Messages.LINK_COLOR = '#3059c9';
+		Messages.ALERT_COLOR = '#cc0000';
 		on('ready', () => Messages.GAME_MASTERS = Util.findGMsInGame());
+
+		Token.SHEET_ITEM_TIMEOUT_MS = 5000;
 
 		TurnOrderSynchronizer.CHECK_OFF = '☐';
 		TurnOrderSynchronizer.CHECK_PART = '▣';
@@ -2442,6 +2767,7 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 				persist: true,
 				maxConsecutiveTurns: 2,
 				teamSizeAdjustment: true,
+				teamSizeAdjustmentPercent: 35,
 				die: 'd6',
 				amountIncreasingPerTurn: true
 			},
