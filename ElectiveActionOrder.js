@@ -982,11 +982,17 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 			}, 'tokenDeadHandler');
 		}
 
-		// A deleted token can no longer act, so it leaves initiative no matter which team it was on. This mirrors
-		// the plain roll20 turn order, which drops a token's entry when the token is deleted.
+		// A deleted enemy token can no longer act, so it leaves initiative, the same way the plain roll20 turn
+		// order drops a token's entry when the token is deleted. Players are left alone: a deleted player token
+		// is nearly always a mapping accident rather than the character leaving the fight.
 		static tokenDestroyedHandler(graphic) {
 			Util.reportErrors(() => {
-				CombatParticipants._removeByTokenIDWithNotice(graphic.get('_id'), 'was removed from the board');
+				const id = graphic.get('_id');
+				const participant = CombatParticipants.findAll().find(participant => participant.token === id);
+				if (!participant || !participant.isEnemy()) {
+					return;
+				}
+				CombatParticipants._removeByTokenIDWithNotice(id, 'was removed from the board');
 			}, 'tokenDestroyedHandler');
 		}
 

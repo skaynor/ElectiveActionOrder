@@ -1,5 +1,5 @@
 #v1.2.1
-- Remove a participant from initiative when its token is deleted from the board, matching what the plain roll20 turn order does. Previously a deleted token stayed in the turn selector until the combat was stopped or it was removed by hand. Unlike the dead marker, this applies to both teams, since a deleted token cannot act either way
+- Remove an enemy from initiative when its token is deleted from the board, matching what the plain roll20 turn order does. Previously a deleted token stayed in the turn selector until the combat was stopped or it was removed by hand. Like the dead marker, this leaves players alone
 - Fix an error when the dead marker was added to a token while no combat was running
 
 #v1.2.0

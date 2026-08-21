@@ -75,7 +75,7 @@ Which shows your player a menu to also give the turn to someone:
 
 As you see, the enemies are grouped into one button, see the [config](#config) for why that is.
 
-Now, if something dies, you can either remove it from initiative by selecting the token and typing `!eao remove`, or, if it is an enemy, simply giving it the "dead"-marker (the big red cross). Deleting a token from the board also removes it from initiative, for both teams:
+Now, if something dies, you can either remove it from initiative by selecting the token and typing `!eao remove`, or, if it is an enemy, simply giving it the "dead"-marker (the big red cross). Deleting an enemy token from the board also removes it from initiative:
 
 ![enemy removed](docs/usage_9.png)
 
