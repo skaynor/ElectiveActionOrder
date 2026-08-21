@@ -1,3 +1,7 @@
+#v1.2.1
+- Remove a participant from initiative when its token is deleted from the board, matching what the plain roll20 turn order does. Previously a deleted token stayed in the turn selector until the combat was stopped or it was removed by hand. Unlike the dead marker, this applies to both teams, since a deleted token cannot act either way
+- Fix an error when the dead marker was added to a token while no combat was running
+
 #v1.2.0
 - Change "tacticalDice.teamSizeAdjustment" to scale both teams independently: each team may now let a percentage of its own members act in succession, instead of only the larger team getting a raised limit
 - Fix participants not showing up in the turn order tracker: every turn order entry now carries the required "_pageid", without which the tracker cannot resolve the token an entry refers to and drops the row (only custom entries like the grouped "Enemies" remained visible)

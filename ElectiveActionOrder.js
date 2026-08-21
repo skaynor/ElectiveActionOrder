@@ -974,19 +974,47 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 				if (!graphic.get('status_dead')) {
 					return;
 				}
-				const id = graphic.get('_id');
-				if (!CombatParticipants._doesNPCWithTokenIDExist(id)) {
+				// Only NPCs are removed by the dead marker - a downed player is not out of the fight.
+				if (!CombatParticipants._doesNPCWithTokenIDExist(graphic.get('_id'))) {
 					return;
 				}
-				const currentParticipant = RoundInfo.findCurrentParticipant();
-				const participant = CombatParticipants.findAll().find(participant => participant.token === id);
-				if ((RoundInfo.hasToAct(participant) || RoundInfo.areAllTurnsDone())) {
-					const name = (!Config.get().groupEnemies || currentParticipant.isEnemy()) ? participant.name : 'An enemy';
-					Messages.sendInfoParticipant(currentParticipant, name + ' died, these are the new choices:');
-				}
-
-				CombatParticipants.remove(participant);
+				CombatParticipants._removeByTokenIDWithNotice(graphic.get('_id'), 'died');
 			}, 'tokenDeadHandler');
+		}
+
+		// A deleted token can no longer act, so it leaves initiative no matter which team it was on. This mirrors
+		// the plain roll20 turn order, which drops a token's entry when the token is deleted.
+		static tokenDestroyedHandler(graphic) {
+			Util.reportErrors(() => {
+				CombatParticipants._removeByTokenIDWithNotice(graphic.get('_id'), 'was removed from the board');
+			}, 'tokenDestroyedHandler');
+		}
+
+		static _removeByTokenIDWithNotice(tokenID, reason) {
+			const participant = CombatParticipants.findAll().find(participant => participant.token === tokenID);
+			if (!participant) {
+				return;
+			}
+
+			// Announced separately so that a problem while messaging can never keep the participant in initiative.
+			Util.reportErrors(() => CombatParticipants._announceRemoval(participant, reason), '_announceRemoval');
+
+			CombatParticipants.remove(participant);
+		}
+
+		static _announceRemoval(participant, reason) {
+			// Outside of a running combat there is no menu to update and no current participant to tell.
+			if (!RoundInfo.isCombatRunning()) {
+				return;
+			}
+			const currentParticipant = RoundInfo.findCurrentParticipant();
+			if (!currentParticipant || !(RoundInfo.hasToAct(participant) || RoundInfo.areAllTurnsDone())) {
+				return;
+			}
+
+			const hideName = Config.get().groupEnemies && participant.isEnemy() && !currentParticipant.isEnemy();
+			const name = hideName ? 'An enemy' : participant.name;
+			Messages.sendInfoParticipant(currentParticipant, name + ' ' + reason + ', these are the new choices:');
 		}
 
 		static reset() {
@@ -2789,12 +2817,14 @@ var ElectiveActionOrder = ElectiveActionOrder || (function() {
 	CommandLineInterface.create();
 
 	on("change:graphic", CombatParticipants.tokenDeadHandler);
+	on('destroy:graphic', CombatParticipants.tokenDestroyedHandler);
 
 	on('ready', () => {
 		log('ElectiveActionOrder loaded');
 	});
 
 	return {
-		handleDeadToken: CombatParticipants.tokenDeadHandler
+		handleDeadToken: CombatParticipants.tokenDeadHandler,
+		handleDestroyedToken: CombatParticipants.tokenDestroyedHandler
 	};
 })();

@@ -1,8 +1,8 @@
 {
     "name": "Elective Action Order",
     "script": "ElectiveActionOrder.js",
-    "version": "1.2.0",
-    "previousversions": ["1.0.0", "1.1.0", "1.1.2"],
+    "version": "1.2.1",
+    "previousversions": ["1.0.0", "1.1.0", "1.1.2", "1.2.0"],
     "description": "An alternative initiative system for Roll20 (\"Elective Action Order\" / \"Popcorn Initiative\"): whoever has the current turn designates who acts next. Extends the Roll20 turn order tracker and provides a chat interface for the players and GM. Supports both the \"D&D 5E by Roll20\" (2014) and the \"D&D 2024 by Roll20\" character sheets; the 2024 sheet requires the Experimental API sandbox.",
     "authors": "Timo (Azzurite)",
     "roll20userid": "2153524",
